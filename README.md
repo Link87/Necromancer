@@ -1,1 +1,1 @@
-# A Compiler for the ZOMBIE Programming Language
+# An Interpreter for the ZOMBIE Programming Language
