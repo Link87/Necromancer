@@ -1,0 +1,6 @@
+Peter is a zombie
+summon
+    task Greet
+        say "Hello World!"
+    animate
+animate

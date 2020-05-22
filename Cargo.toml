@@ -1,5 +1,5 @@
 [package]
-name = "Necromancer"
+name = "necromancer"
 version = "0.1.0"
 authors = ["Marvin Gazibarić <m.gazibaric@live.de>"]
 edition = "2018"
