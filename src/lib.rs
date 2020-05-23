@@ -1,5 +1,10 @@
+extern crate nom;
+
 use std::error::Error;
 use std::fs;
+
+pub mod entity;
+pub mod parse;
 
 pub struct Config {
     pub filename: String,
@@ -18,10 +23,10 @@ impl Config {
 }
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    let contents = fs::read_to_string(config.filename)?;
+    let code = fs::read_to_string(config.filename)?;
 
-    println!("Source code: \r\n{}", contents);
+    let result = parse::parse(&code);
+    println!("{:?}", result);
 
     Ok(())
 }
-
