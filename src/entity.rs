@@ -1,17 +1,17 @@
+use crate::task::Task;
+
 #[derive(Debug)]
 pub struct Entity {
     kind: EntityKind,
     name: String,
-    remember: Remember<i64>,
     is_active: bool,
+    memory: Memory,
+    tasks: Vec<Task>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum Remember<T>
-where
-    T: Copy + Clone + Eq + Ord,
-{
-    Value(T),
+pub enum Memory {
+    Number(i64),
     None,
 }
 
@@ -25,21 +25,20 @@ pub enum EntityKind {
 }
 
 impl Entity {
-    pub fn new<'a>(kind: EntityKind, name: String) -> Entity {
+    pub fn summon(
+        kind: EntityKind,
+        name: String,
+        is_active: bool,
+        memory: Memory,
+        tasks: Vec<Task>,
+    ) -> Entity {
         Entity {
             kind,
             name,
-            remember: Remember::None,
-            is_active: false,
+            is_active,
+            memory,
+            tasks,
         }
-    }
-
-    fn _remember(&mut self, value: Remember<i64>) {
-        self.remember = value;
-    }
-
-    pub fn remembering(&self) -> Remember<i64> {
-        self.remember
     }
 
     pub fn kind(&self) -> EntityKind {
@@ -54,7 +53,15 @@ impl Entity {
         self.is_active
     }
 
-    fn _summon(&mut self, spell: &str) {
-        self.is_active = spell == "animate";
+    pub fn remember(&mut self, value: Memory) {
+        self.memory = value;
+    }
+
+    pub fn moan(&self) -> Memory {
+        self.memory
+    }
+
+    pub fn tasks<'a>(&'a self) -> &'a Vec<Task> {
+        &self.tasks
     }
 }

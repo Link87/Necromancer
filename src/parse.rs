@@ -1,11 +1,13 @@
 use nom::branch::alt;
-use nom::bytes::complete::{tag, take_till, take_while};
-use nom::character::complete::{alphanumeric1, anychar, multispace0, space1};
-use nom::combinator::not;
+use nom::bytes::complete::tag;
+use nom::character::complete::{alphanumeric1, anychar, multispace0, multispace1};
+use nom::combinator::{complete, not, opt, peek};
 use nom::error::ErrorKind;
+use nom::multi::many1;
 use nom::{Err, IResult};
 
-use crate::entity::{Entity, EntityKind};
+use crate::entity::{Entity, EntityKind, Memory};
+use crate::task::Task;
 
 trait Parse<'a> {
     fn parse(code: &'a str) -> IResult<&'a str, Self>
@@ -30,44 +32,73 @@ impl SyntaxTree {
 
 impl<'a> Parse<'a> for SyntaxTree {
     fn parse(code: &'a str) -> IResult<&'a str, SyntaxTree> {
-        let (rest, entities) = nom::multi::many1(|code| Entity::parse(code))(code)?;
-        let (rest, line) = read_line(rest)?;
-        assert_line_ending(line)?;
-        assert_line_ending(rest)?;
+        let (code, entities) = many1(|code| {
+            let (code, entities) = Entity::parse(code)?;
+            let (code, _) = multispace0(code)?;
+            Ok((code, entities))
+        })(code)?;
+        assert_eof(code)?;
 
-        Ok((rest, SyntaxTree::new(entities)))
+        Ok((code, SyntaxTree::new(entities)))
     }
 }
 
 impl<'a> Parse<'a> for Entity {
     fn parse(code: &'a str) -> IResult<&'a str, Entity> {
-        let (code_rest, line) = read_line(code)?;
-        println!("line: {:?}", line);
-        let (line_rest, name) = alphanumeric1(line)?;
-        let (line_rest, _) = space1(line_rest)?;
-        let (line_rest, _) = alt((tag("is an"), tag("is a")))(line_rest)?;
-        let (line_rest, _) = space1(line_rest)?;
-        let (line_rest, kind) = EntityKind::parse(line_rest)?;
-        let _ = assert_line_ending(line_rest)?;
+        println!("Code (entity): {}", code);
+        let (code, _) = multispace0(code)?;
+        let (code, name) = alphanumeric1(code)?;
+        let (code, _) = multispace1(code)?;
+        let (code, _) = tag("is")(code)?;
+        let (code, _) = multispace1(code)?;
+        let (code, _) = alt((tag("an"), tag("a")))(code)?;
+        let (code, _) = multispace1(code)?;
 
-        let (code_rest, line) = read_line(code_rest)?;
-        println!("line: {:?}", line);
-        let (line_rest, _) = tag("summon")(line)?;
-        let _ = assert_line_ending(line_rest)?;
+        let (code, kind) = EntityKind::parse(code)?;
 
-        let (code_rest, line) = read_line(code_rest)?;
-        println!("line: {:?}", line);
-        let (line_rest, _) = tag("animate")(line)?;
-        let _ = assert_line_ending(line_rest)?;
+        let (code, _) = multispace1(code)?;
+        let (code, _) = tag("summon")(code)?;
 
-        println!("Summoning entity {} of kind {:?}.", name, kind);
+        println!("Code (entity 2): {}", code);
 
-        Ok((code_rest, Entity::new(kind, String::from(name))))
+        let mut tasks = Vec::new();
+        let memory = Memory::None;
+        let mut code = code;
+        loop {
+            let (lcode, _) = multispace1(code)?;
+            let (lcode, action) = opt(alt((peek(tag("remember")), peek(tag("task")))))(lcode)?;
+            println!("Code (action): {:?}", action);
+            match action {
+                Some("remember") => {
+                    // TODO parse remember values
+                }
+                Some("task") => {
+                    let (lcode, task) = Task::parse(lcode)?;
+                    tasks.push(task);
+                    code = lcode;
+                }
+                _ => break,
+            }
+        }
+
+        let (code, _) = multispace1(code)?;
+        let (code, spell) = alt((tag("animate"), tag("bind"), tag("disturb")))(code)?;
+
+        println!(
+            "Summoning entity {} of kind {:?}, using {}.",
+            name, kind, spell
+        );
+
+        Ok((
+            code,
+            Entity::summon(kind, String::from(name), false, memory, tasks),
+        ))
     }
 }
 
 impl<'a> Parse<'a> for EntityKind {
     fn parse(code: &'a str) -> IResult<&'a str, EntityKind> {
+        println!("Code (entity kind): {}", code);
         let (rest, kind) = alt((
             tag("zombie"),
             tag("enslaved undead"),
@@ -89,24 +120,26 @@ impl<'a> Parse<'a> for EntityKind {
     }
 }
 
-fn read_line<'a>(code: &'a str) -> IResult<&'a str, &'a str> {
-    let (line, _) = multispace0(code)?;
-    let (rest, line) = take_while(|c| c != '\r' && c != '\n')(line)?;
-    let (_, line) = take_till_comment(line)?;
-    // TODO drop lines that only contain a comment
-    Ok((rest, line))
+impl<'a> Parse<'a> for Task {
+    fn parse(code: &'a str) -> IResult<&'a str, Task> {
+        println!("Code (task): {}", code);
+        let (code, _) = multispace0(code)?;
+        let (code, _) = tag("task")(code)?;
+        let (code, _) = multispace1(code)?;
+        let (code, name) = alphanumeric1(code)?;
+
+        let (code, _) = multispace1(code)?;
+        let (code, _) = alt((tag("animate"), tag("bind")))(code)?;
+        Ok((code, Task::new(String::from(name), true)))
+    }
 }
 
-fn take_till_comment<'a>(code: &'a str) -> IResult<&'a str, &'a str> {
-    take_till(|c| c == '#')(code)
-}
-
-fn assert_line_ending<'a>(code: &'a str) -> IResult<&'a str, ()> {
+fn assert_eof<'a>(code: &'a str) -> IResult<&'a str, ()> {
     not(anychar)(code)
 }
 
 pub fn parse<'a>(code: &'a str) -> Result<SyntaxTree, Err<(&'a str, ErrorKind)>> {
-    match SyntaxTree::parse(code) {
+    match complete(SyntaxTree::parse)(code) {
         Ok((_, tree)) => Ok(tree),
         Err(error) => Err(error),
     }
@@ -115,7 +148,7 @@ pub fn parse<'a>(code: &'a str) -> Result<SyntaxTree, Err<(&'a str, ErrorKind)>>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::entity::Remember;
+    use crate::entity::Memory;
 
     #[test]
     fn parse_entities() {
@@ -151,27 +184,27 @@ animate
 
         assert_eq!(tree.entities()[0].kind(), EntityKind::Zombie);
         assert_eq!(tree.entities()[0].name(), "Peter");
-        assert_eq!(tree.entities()[0].remembering(), Remember::None);
+        assert_eq!(tree.entities()[0].moan(), Memory::None);
 
         assert_eq!(tree.entities()[1].kind(), EntityKind::Zombie);
         assert_eq!(tree.entities()[1].name(), "Jay");
-        assert_eq!(tree.entities()[1].remembering(), Remember::None);
+        assert_eq!(tree.entities()[1].moan(), Memory::None);
 
         assert_eq!(tree.entities()[2].kind(), EntityKind::Zombie);
         assert_eq!(tree.entities()[2].name(), "Sarah");
-        assert_eq!(tree.entities()[2].remembering(), Remember::None);
+        assert_eq!(tree.entities()[2].moan(), Memory::None);
 
         assert_eq!(tree.entities()[3].kind(), EntityKind::Vampire);
         assert_eq!(tree.entities()[3].name(), "Max");
-        assert_eq!(tree.entities()[3].remembering(), Remember::None);
+        assert_eq!(tree.entities()[3].moan(), Memory::None);
 
         assert_eq!(tree.entities()[4].kind(), EntityKind::Djinn);
         assert_eq!(tree.entities()[4].name(), "Anna");
-        assert_eq!(tree.entities()[4].remembering(), Remember::None);
+        assert_eq!(tree.entities()[4].moan(), Memory::None);
 
         assert_eq!(tree.entities()[5].kind(), EntityKind::Demon);
         assert_eq!(tree.entities()[5].name(), "Beatrix");
-        assert_eq!(tree.entities()[5].remembering(), Remember::None);
+        assert_eq!(tree.entities()[5].moan(), Memory::None);
     }
 
     #[test]
@@ -189,6 +222,36 @@ summon
 
         assert_eq!(tree.entities()[0].kind(), EntityKind::Zombie);
         assert_eq!(tree.entities()[0].name(), "Peter");
-        assert_eq!(tree.entities()[0].remembering(), Remember::None);
+        assert_eq!(tree.entities()[0].moan(), Memory::None);
+    }
+
+    #[test]
+    fn parse_tasks() {
+        let code = "\
+Peter is a zombie
+summon
+    task Test1
+    animate
+    task Test2
+    animate
+animate
+
+Jay is an enslaved undead
+summon
+    task Test3
+    animate
+    task Test1
+    animate
+animate";
+
+        let tree = parse(code).unwrap();
+
+        assert_eq!(tree.entities()[0].tasks().len(), 2);
+        assert_eq!(tree.entities()[0].tasks()[0].name(), "Test1");
+        assert_eq!(tree.entities()[0].tasks()[1].name(), "Test2");
+
+        assert_eq!(tree.entities()[0].tasks().len(), 2);
+        assert_eq!(tree.entities()[1].tasks()[0].name(), "Test3");
+        assert_eq!(tree.entities()[1].tasks()[1].name(), "Test1");
     }
 }
