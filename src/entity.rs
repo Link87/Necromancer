@@ -1,21 +1,21 @@
 #[derive(Debug)]
-pub struct Entity<'a> {
+pub struct Entity {
     kind: EntityKind,
-    name: &'a str,
+    name: String,
     remember: Remember<i64>,
     is_active: bool,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Remember<T>
 where
-    T: Copy + Clone,
+    T: Copy + Clone + Eq + Ord,
 {
     Value(T),
     None,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum EntityKind {
     Zombie,
     Ghost,
@@ -24,8 +24,8 @@ pub enum EntityKind {
     Djinn,
 }
 
-impl Entity<'_> {
-    pub fn new<'a>(kind: EntityKind, name: &'a str) -> Entity {
+impl Entity {
+    pub fn new<'a>(kind: EntityKind, name: String) -> Entity {
         Entity {
             kind,
             name,
@@ -38,8 +38,20 @@ impl Entity<'_> {
         self.remember = value;
     }
 
-    fn _remembering(&self) -> Remember<i64> {
+    pub fn remembering(&self) -> Remember<i64> {
         self.remember
+    }
+
+    pub fn kind(&self) -> EntityKind {
+        self.kind
+    }
+
+    pub fn name<'a>(&'a self) -> &'a str {
+        &self.name
+    }
+
+    pub fn active(&self) -> bool {
+        self.is_active
     }
 
     fn _summon(&mut self, spell: &str) {
