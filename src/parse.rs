@@ -1,6 +1,6 @@
 use nom::branch::alt;
 use nom::bytes::complete::tag;
-use nom::character::complete::{alphanumeric1, anychar, multispace0, multispace1};
+use nom::character::complete::{alphanumeric1, anychar, char, digit1, multispace0, multispace1};
 use nom::combinator::{complete, not, opt, peek};
 use nom::error::ErrorKind;
 use nom::multi::many1;
@@ -45,7 +45,6 @@ impl<'a> Parse<'a> for SyntaxTree {
 
 impl<'a> Parse<'a> for Entity {
     fn parse(code: &'a str) -> IResult<&'a str, Entity> {
-        println!("Code (entity): {}", code);
         let (code, _) = multispace0(code)?;
         let (code, name) = alphanumeric1(code)?;
         let (code, _) = multispace1(code)?;
@@ -59,18 +58,18 @@ impl<'a> Parse<'a> for Entity {
         let (code, _) = multispace1(code)?;
         let (code, _) = tag("summon")(code)?;
 
-        println!("Code (entity 2): {}", code);
-
         let mut tasks = Vec::new();
-        let memory = Memory::None;
+        let mut memory = Memory::None;
         let mut code = code;
         loop {
+            // TODO fix when destructuring assignments (RFC 372) come to rust
             let (lcode, _) = multispace1(code)?;
             let (lcode, action) = opt(alt((peek(tag("remember")), peek(tag("task")))))(lcode)?;
-            println!("Code (action): {:?}", action);
             match action {
                 Some("remember") => {
-                    // TODO parse remember values
+                    let (lcode, lmemory) = Memory::parse(lcode)?;
+                    memory = lmemory;
+                    code = lcode;
                 }
                 Some("task") => {
                     let (lcode, task) = Task::parse(lcode)?;
@@ -85,8 +84,11 @@ impl<'a> Parse<'a> for Entity {
         let (code, spell) = alt((tag("animate"), tag("bind"), tag("disturb")))(code)?;
 
         println!(
-            "Summoning entity {} of kind {:?}, using {}.",
-            name, kind, spell
+            "Summoning entity {} of kind {:?} with {} tasks, using {}.",
+            name,
+            kind,
+            tasks.len(),
+            spell
         );
 
         Ok((
@@ -98,7 +100,6 @@ impl<'a> Parse<'a> for Entity {
 
 impl<'a> Parse<'a> for EntityKind {
     fn parse(code: &'a str) -> IResult<&'a str, EntityKind> {
-        println!("Code (entity kind): {}", code);
         let (rest, kind) = alt((
             tag("zombie"),
             tag("enslaved undead"),
@@ -134,8 +135,37 @@ impl<'a> Parse<'a> for Task {
     }
 }
 
+impl<'a> Parse<'a> for Memory {
+    fn parse(code: &'a str) -> IResult<&'a str, Memory> {
+        println!("Code (task): {}", code);
+        let (code, _) = multispace0(code)?;
+        let (code, _) = tag("remember")(code)?;
+        let (code, _) = multispace1(code)?;
+        let (code, value) = parse_integer(code)?;
+
+        Ok((code, Memory::Number(value)))
+    }
+}
+
 fn assert_eof<'a>(code: &'a str) -> IResult<&'a str, ()> {
     not(anychar)(code)
+}
+
+fn parse_integer<'a>(code: &'a str) -> IResult<&'a str, i64> {
+    let mut sign: i64 = 1;
+    let mut code = code;
+    if let Ok((lcode, _)) = char::<_, (&'a str, ErrorKind)>('-')(code) {
+        sign = -1;
+        code = lcode;
+    }
+
+    let (code, num) = digit1(code)?;
+    let num = str::parse::<i64>(num);
+
+    match num {
+        Ok(num) => Ok((code, num * sign)),
+        Err(_) => Err(nom::Err::Error((code, ErrorKind::Digit))),
+    }
 }
 
 pub fn parse<'a>(code: &'a str) -> Result<SyntaxTree, Err<(&'a str, ErrorKind)>> {
@@ -253,5 +283,47 @@ animate";
         assert_eq!(tree.entities()[0].tasks().len(), 2);
         assert_eq!(tree.entities()[1].tasks()[0].name(), "Test3");
         assert_eq!(tree.entities()[1].tasks()[1].name(), "Test1");
+    }
+
+    #[test]
+    fn parse_remember() {
+        let code = "\
+Peter is a zombie
+summon
+    remember -161
+animate
+
+Jay is an enslaved undead
+summon
+    task Test1
+    animate
+    remember 1312
+    task Test2
+    animate
+animate";
+
+        let tree = parse(code).unwrap();
+
+        assert_eq!(tree.entities()[0].tasks().len(), 0);
+        assert_eq!(tree.entities()[0].moan(), Memory::Number(-161));
+
+        assert_eq!(tree.entities()[1].tasks().len(), 2);
+        assert_eq!(tree.entities()[1].tasks()[0].name(), "Test1");
+        assert_eq!(tree.entities()[1].tasks()[1].name(), "Test2");
+        assert_eq!(tree.entities()[1].moan(), Memory::Number(1312));
+    }
+
+    #[test]
+    fn parse_i64() -> Result<(), Err<(&'static str, ErrorKind)>> {
+        let (_, num) = parse_integer("2341")?;
+        assert_eq!(num, 2341);
+
+        let (_, num) = parse_integer("-2341")?;
+        assert_eq!(num, -2341);
+
+        let (_, num) = parse_integer("0")?;
+        assert_eq!(num, 0);
+
+        Ok(())
     }
 }
