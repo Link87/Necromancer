@@ -91,9 +91,16 @@ impl<'a> Parse<'a> for Entity {
             spell
         );
 
+        let active = match (kind, spell) {
+            (EntityKind::Zombie, "animate") => true,
+            (EntityKind::Ghost, "disturb") => true,
+            (EntityKind::Vampire, _) | (EntityKind::Demon, _) | (EntityKind::Djinn, _) => true,
+            _ => false,
+        };
+
         Ok((
             code,
-            Entity::summon(kind, String::from(name), false, memory, tasks),
+            Entity::summon(kind, String::from(name), active, memory, tasks),
         ))
     }
 }
@@ -130,8 +137,9 @@ impl<'a> Parse<'a> for Task {
         let (code, name) = alphanumeric1(code)?;
 
         let (code, _) = multispace1(code)?;
-        let (code, _) = alt((tag("animate"), tag("bind")))(code)?;
-        Ok((code, Task::new(String::from(name), true)))
+        let (code, spell) = alt((tag("animate"), tag("bind")))(code)?;
+
+        Ok((code, Task::new(String::from(name), spell == "animate")))
     }
 }
 
@@ -325,5 +333,63 @@ animate";
         assert_eq!(num, 0);
 
         Ok(())
+    }
+
+    #[test]
+    fn parse_active() {
+        let code = "\
+Peter is a zombie
+summon
+    task Test1
+    bind
+    task Test2
+    animate
+animate
+
+Jay is an enslaved undead
+summon
+    task Test3
+    animate
+    task Test1
+    bind
+bind
+
+Myrte is a ghost
+summon
+disturb
+
+BuhHuh is a ghost
+summon
+bind
+
+Max is a free-willed undead
+summon
+bind
+
+Anna is a djinn
+summon
+bind
+
+Beatrix is a demon
+summon
+bind";
+
+        let tree = parse(code).unwrap();
+
+        assert_eq!(tree.entities()[0].active(), true);
+        assert_eq!(tree.entities()[0].tasks().len(), 2);
+        assert_eq!(tree.entities()[0].tasks()[0].active(), false);
+        assert_eq!(tree.entities()[0].tasks()[1].active(), true);
+
+        assert_eq!(tree.entities()[1].active(), false);
+        assert_eq!(tree.entities()[1].tasks().len(), 2);
+        assert_eq!(tree.entities()[1].tasks()[0].active(), true);
+        assert_eq!(tree.entities()[1].tasks()[1].active(), false);
+
+        assert_eq!(tree.entities()[2].active(), true);
+        assert_eq!(tree.entities()[3].active(), false);
+        assert_eq!(tree.entities()[4].active(), true);
+        assert_eq!(tree.entities()[5].active(), true);
+        assert_eq!(tree.entities()[6].active(), true);
     }
 }
