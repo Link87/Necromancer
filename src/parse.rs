@@ -6,8 +6,9 @@ use nom::error::ErrorKind;
 use nom::multi::many1;
 use nom::{Err, IResult};
 
-use crate::entity::{Entity, EntityKind, Memory};
+use crate::entity::{Entity, EntityKind};
 use crate::task::Task;
+use crate::value::Value;
 
 trait Parse<'a> {
     fn parse(code: &'a str) -> IResult<&'a str, Self>
@@ -59,7 +60,7 @@ impl<'a> Parse<'a> for Entity {
         let (code, _) = tag("summon")(code)?;
 
         let mut tasks = Vec::new();
-        let mut memory = Memory::None;
+        let mut memory = Value::None;
         let mut code = code;
         loop {
             // TODO fix when destructuring assignments (RFC 372) come to rust
@@ -67,7 +68,7 @@ impl<'a> Parse<'a> for Entity {
             let (lcode, action) = opt(alt((peek(tag("remember")), peek(tag("task")))))(lcode)?;
             match action {
                 Some("remember") => {
-                    let (lcode, lmemory) = Memory::parse(lcode)?;
+                    let (lcode, lmemory) = Value::parse(lcode)?;
                     memory = lmemory;
                     code = lcode;
                 }
@@ -143,15 +144,15 @@ impl<'a> Parse<'a> for Task {
     }
 }
 
-impl<'a> Parse<'a> for Memory {
-    fn parse(code: &'a str) -> IResult<&'a str, Memory> {
+impl<'a> Parse<'a> for Value {
+    fn parse(code: &'a str) -> IResult<&'a str, Value> {
         println!("Code (task): {}", code);
         let (code, _) = multispace0(code)?;
         let (code, _) = tag("remember")(code)?;
         let (code, _) = multispace1(code)?;
         let (code, value) = parse_integer(code)?;
 
-        Ok((code, Memory::Number(value)))
+        Ok((code, Value::Integer(value)))
     }
 }
 
@@ -186,7 +187,7 @@ pub fn parse<'a>(code: &'a str) -> Result<SyntaxTree, Err<(&'a str, ErrorKind)>>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::entity::Memory;
+    use crate::value::Value;
 
     #[test]
     fn parse_entities() {
@@ -222,27 +223,27 @@ animate
 
         assert_eq!(tree.entities()[0].kind(), EntityKind::Zombie);
         assert_eq!(tree.entities()[0].name(), "Peter");
-        assert_eq!(tree.entities()[0].moan(), Memory::None);
+        assert_eq!(tree.entities()[0].moan(), Value::None);
 
         assert_eq!(tree.entities()[1].kind(), EntityKind::Zombie);
         assert_eq!(tree.entities()[1].name(), "Jay");
-        assert_eq!(tree.entities()[1].moan(), Memory::None);
+        assert_eq!(tree.entities()[1].moan(), Value::None);
 
         assert_eq!(tree.entities()[2].kind(), EntityKind::Zombie);
         assert_eq!(tree.entities()[2].name(), "Sarah");
-        assert_eq!(tree.entities()[2].moan(), Memory::None);
+        assert_eq!(tree.entities()[2].moan(), Value::None);
 
         assert_eq!(tree.entities()[3].kind(), EntityKind::Vampire);
         assert_eq!(tree.entities()[3].name(), "Max");
-        assert_eq!(tree.entities()[3].moan(), Memory::None);
+        assert_eq!(tree.entities()[3].moan(), Value::None);
 
         assert_eq!(tree.entities()[4].kind(), EntityKind::Djinn);
         assert_eq!(tree.entities()[4].name(), "Anna");
-        assert_eq!(tree.entities()[4].moan(), Memory::None);
+        assert_eq!(tree.entities()[4].moan(), Value::None);
 
         assert_eq!(tree.entities()[5].kind(), EntityKind::Demon);
         assert_eq!(tree.entities()[5].name(), "Beatrix");
-        assert_eq!(tree.entities()[5].moan(), Memory::None);
+        assert_eq!(tree.entities()[5].moan(), Value::None);
     }
 
     #[test]
@@ -260,7 +261,7 @@ summon
 
         assert_eq!(tree.entities()[0].kind(), EntityKind::Zombie);
         assert_eq!(tree.entities()[0].name(), "Peter");
-        assert_eq!(tree.entities()[0].moan(), Memory::None);
+        assert_eq!(tree.entities()[0].moan(), Value::None);
     }
 
     #[test]
@@ -313,12 +314,12 @@ animate";
         let tree = parse(code).unwrap();
 
         assert_eq!(tree.entities()[0].tasks().len(), 0);
-        assert_eq!(tree.entities()[0].moan(), Memory::Number(-161));
+        assert_eq!(tree.entities()[0].moan(), Value::Integer(-161));
 
         assert_eq!(tree.entities()[1].tasks().len(), 2);
         assert_eq!(tree.entities()[1].tasks()[0].name(), "Test1");
         assert_eq!(tree.entities()[1].tasks()[1].name(), "Test2");
-        assert_eq!(tree.entities()[1].moan(), Memory::Number(1312));
+        assert_eq!(tree.entities()[1].moan(), Value::Integer(1312));
     }
 
     #[test]

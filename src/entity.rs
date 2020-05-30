@@ -1,18 +1,13 @@
 use crate::task::Task;
+use crate::value::Value;
 
 #[derive(Debug)]
 pub struct Entity {
     kind: EntityKind,
     name: String,
     is_active: bool,
-    memory: Memory,
+    memory: Value,
     tasks: Vec<Task>,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub enum Memory {
-    Number(i64),
-    None,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -29,7 +24,7 @@ impl Entity {
         kind: EntityKind,
         name: String,
         is_active: bool,
-        memory: Memory,
+        memory: Value,
         tasks: Vec<Task>,
     ) -> Entity {
         Entity {
@@ -53,12 +48,12 @@ impl Entity {
         self.is_active
     }
 
-    pub fn remember(&mut self, value: Memory) {
+    pub fn remember(&mut self, value: Value) {
         self.memory = value;
     }
 
-    pub fn moan(&self) -> Memory {
-        self.memory
+    pub fn moan(&self) -> &Value {
+        &self.memory
     }
 
     pub fn tasks<'a>(&'a self) -> &'a Vec<Task> {

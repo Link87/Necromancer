@@ -6,6 +6,7 @@ use std::fs;
 pub mod entity;
 pub mod parse;
 pub mod task;
+pub mod value;
 
 pub struct Config {
     pub filename: String,
