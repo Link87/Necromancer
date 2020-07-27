@@ -1,12 +1,19 @@
+use crate::statement::Statement;
+
 #[derive(Debug)]
 pub struct Task {
     name: String,
     is_active: bool,
+    statements: Vec<Statement>,
 }
 
 impl Task {
-    pub fn new(name: String, is_active: bool) -> Task {
-        Task { name, is_active }
+    pub fn new(name: String, is_active: bool, statements: Vec<Statement>) -> Task {
+        Task {
+            name,
+            is_active,
+            statements,
+        }
     }
 
     pub fn name<'a>(&'a self) -> &'a str {
@@ -15,5 +22,9 @@ impl Task {
 
     pub fn active(&self) -> bool {
         self.is_active
+    }
+
+    pub fn statements<'a>(&'a self) -> &'a Vec<Statement> {
+        &self.statements
     }
 }

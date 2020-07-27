@@ -1,12 +1,14 @@
 use nom::branch::alt;
-use nom::bytes::complete::tag;
+use nom::bytes::complete::{tag, take_till};
 use nom::character::complete::{alphanumeric1, anychar, char, digit1, multispace0, multispace1};
 use nom::combinator::{complete, not, opt, peek};
 use nom::error::ErrorKind;
-use nom::multi::many1;
+use nom::multi::{many0, many1};
+use nom::sequence::delimited;
 use nom::{Err, IResult};
 
 use crate::entity::{Entity, EntityKind};
+use crate::statement::{Statement, StatementCmd};
 use crate::task::Task;
 use crate::value::Value;
 
@@ -60,7 +62,7 @@ impl<'a> Parse<'a> for Entity {
         let (code, _) = tag("summon")(code)?;
 
         let mut tasks = Vec::new();
-        let mut memory = Value::None;
+        let mut memory = Value::Void;
         let mut code = code;
         loop {
             // TODO fix when destructuring assignments (RFC 372) come to rust
@@ -68,6 +70,9 @@ impl<'a> Parse<'a> for Entity {
             let (lcode, action) = opt(alt((peek(tag("remember")), peek(tag("task")))))(lcode)?;
             match action {
                 Some("remember") => {
+                    let (lcode, _) = multispace0(lcode)?;
+                    let (lcode, _) = tag("remember")(lcode)?;
+                    let (lcode, _) = multispace1(lcode)?;
                     let (lcode, lmemory) = Value::parse(lcode)?;
                     memory = lmemory;
                     code = lcode;
@@ -137,22 +142,48 @@ impl<'a> Parse<'a> for Task {
         let (code, _) = multispace1(code)?;
         let (code, name) = alphanumeric1(code)?;
 
+        let (code, statements) = many0(|code| {
+            let (code, statement) = Statement::parse(code)?;
+            Ok((code, statement))
+        })(code)?;
+
         let (code, _) = multispace1(code)?;
         let (code, spell) = alt((tag("animate"), tag("bind")))(code)?;
 
-        Ok((code, Task::new(String::from(name), spell == "animate")))
+        Ok((
+            code,
+            Task::new(String::from(name), spell == "animate", statements),
+        ))
+    }
+}
+
+impl<'a> Parse<'a> for Statement {
+    fn parse(code: &'a str) -> IResult<&'a str, Statement> {
+        println!("Code (statement): {}", code);
+        let (code, _) = multispace0(code)?;
+        let (code, cmd) = alphanumeric1(code)?;
+
+        match cmd {
+            "say" => {
+                let (code, value) = Value::parse(code)?;
+                Ok((code, Statement::new(StatementCmd::Say(value))))
+            }
+            _ => Err(nom::Err::Error((code, ErrorKind::NoneOf))),
+        }
     }
 }
 
 impl<'a> Parse<'a> for Value {
     fn parse(code: &'a str) -> IResult<&'a str, Value> {
-        println!("Code (task): {}", code);
+        println!("Code (value): {}", code);
         let (code, _) = multispace0(code)?;
-        let (code, _) = tag("remember")(code)?;
-        let (code, _) = multispace1(code)?;
-        let (code, value) = parse_integer(code)?;
-
-        Ok((code, Value::Integer(value)))
+        if let Ok((code, i)) = parse_integer(code) {
+            Ok((code, Value::Integer(i)))
+        } else if let Ok((code, s)) = parse_string(code) {
+            Ok((code, Value::String(String::from(s))))
+        } else {
+            Err(nom::Err::Error((code, ErrorKind::NoneOf)))
+        }
     }
 }
 
@@ -161,6 +192,7 @@ fn assert_eof<'a>(code: &'a str) -> IResult<&'a str, ()> {
 }
 
 fn parse_integer<'a>(code: &'a str) -> IResult<&'a str, i64> {
+    let (code, _) = multispace0(code)?;
     let mut sign: i64 = 1;
     let mut code = code;
     if let Ok((lcode, _)) = char::<_, (&'a str, ErrorKind)>('-')(code) {
@@ -177,8 +209,15 @@ fn parse_integer<'a>(code: &'a str) -> IResult<&'a str, i64> {
     }
 }
 
+fn parse_string<'a>(code: &'a str) -> IResult<&'a str, &'a str> {
+    let (code, _) = multispace0(code)?;
+    let (code, s) = delimited(tag("\""), take_till(|c| c == '\"'), tag("\""))(code)?;
+
+    Ok((code, s))
+}
+
 pub fn parse<'a>(code: &'a str) -> Result<SyntaxTree, Err<(&'a str, ErrorKind)>> {
-    match complete(SyntaxTree::parse)(code) {
+    match complete(|code| SyntaxTree::parse(code))(code) {
         Ok((_, tree)) => Ok(tree),
         Err(error) => Err(error),
     }
@@ -187,6 +226,7 @@ pub fn parse<'a>(code: &'a str) -> Result<SyntaxTree, Err<(&'a str, ErrorKind)>>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::statement::StatementCmd;
     use crate::value::Value;
 
     #[test]
@@ -223,36 +263,35 @@ animate
 
         assert_eq!(tree.entities()[0].kind(), EntityKind::Zombie);
         assert_eq!(tree.entities()[0].name(), "Peter");
-        assert_eq!(tree.entities()[0].moan(), Value::None);
+        assert_eq!(tree.entities()[0].moan(), Value::Void);
 
         assert_eq!(tree.entities()[1].kind(), EntityKind::Zombie);
         assert_eq!(tree.entities()[1].name(), "Jay");
-        assert_eq!(tree.entities()[1].moan(), Value::None);
+        assert_eq!(tree.entities()[1].moan(), Value::Void);
 
         assert_eq!(tree.entities()[2].kind(), EntityKind::Zombie);
         assert_eq!(tree.entities()[2].name(), "Sarah");
-        assert_eq!(tree.entities()[2].moan(), Value::None);
+        assert_eq!(tree.entities()[2].moan(), Value::Void);
 
         assert_eq!(tree.entities()[3].kind(), EntityKind::Vampire);
         assert_eq!(tree.entities()[3].name(), "Max");
-        assert_eq!(tree.entities()[3].moan(), Value::None);
+        assert_eq!(tree.entities()[3].moan(), Value::Void);
 
         assert_eq!(tree.entities()[4].kind(), EntityKind::Djinn);
         assert_eq!(tree.entities()[4].name(), "Anna");
-        assert_eq!(tree.entities()[4].moan(), Value::None);
+        assert_eq!(tree.entities()[4].moan(), Value::Void);
 
         assert_eq!(tree.entities()[5].kind(), EntityKind::Demon);
         assert_eq!(tree.entities()[5].name(), "Beatrix");
-        assert_eq!(tree.entities()[5].moan(), Value::None);
+        assert_eq!(tree.entities()[5].moan(), Value::Void);
     }
 
     #[test]
     fn skip_whitespace() {
         let code = "\
 
-   Peter is a zombie
-summon
-   animate
+   Peter is a zombie\tsummon
+   \r\n\nanimate
     
 \t\t";
 
@@ -261,7 +300,7 @@ summon
 
         assert_eq!(tree.entities()[0].kind(), EntityKind::Zombie);
         assert_eq!(tree.entities()[0].name(), "Peter");
-        assert_eq!(tree.entities()[0].moan(), Value::None);
+        assert_eq!(tree.entities()[0].moan(), Value::Void);
     }
 
     #[test]
@@ -334,6 +373,80 @@ animate";
         assert_eq!(num, 0);
 
         Ok(())
+    }
+
+    #[test]
+    fn parse_str() -> Result<(), Err<(&'static str, ErrorKind)>> {
+        let (_, s) = parse_string("\"\"")?;
+        assert_eq!(s, "");
+
+        let (_, s) = parse_string("\"foo\"")?;
+        assert_eq!(s, "foo");
+
+        let (_, s) = parse_string("  \"bar\"  fadf")?;
+        assert_eq!(s, "bar");
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_value() -> Result<(), Err<(&'static str, ErrorKind)>> {
+        let (_, num) = Value::parse("2341")?;
+        assert_eq!(num, Value::Integer(2341));
+
+        let (_, num) = Value::parse("-2341")?;
+        assert_eq!(num, Value::Integer(-2341));
+
+        let (_, num) = Value::parse("0")?;
+        assert_eq!(num, Value::Integer(0));
+
+        let (_, s) = Value::parse("\"\"")?;
+        assert_eq!(s, Value::String(String::from("")));
+
+        let (_, s) = Value::parse("\"foo\"")?;
+        assert_eq!(s, Value::String(String::from("foo")));
+
+        let (_, s) = Value::parse("  \"bar\"  fadf")?;
+        assert_eq!(s, Value::String(String::from("bar")));
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_say_value() {
+        let code = "\
+Peter is a zombie
+summon
+    task Test1
+        say -161
+        say 1312
+        say \"+161\"
+        say \"Hello World\"
+    animate
+animate
+";
+
+        let tree = parse(code).unwrap();
+
+        assert_eq!(tree.entities()[0].tasks().len(), 1);
+        assert_eq!(tree.entities()[0].tasks()[0].statements().len(), 4);
+
+        assert_eq!(
+            tree.entities()[0].tasks()[0].statements()[0].cmd(),
+            &StatementCmd::Say(Value::Integer(-161))
+        );
+        assert_eq!(
+            tree.entities()[0].tasks()[0].statements()[1].cmd(),
+            &StatementCmd::Say(Value::Integer(1312))
+        );
+        assert_eq!(
+            tree.entities()[0].tasks()[0].statements()[2].cmd(),
+            &StatementCmd::Say(Value::String(String::from("+161")))
+        );
+        assert_eq!(
+            tree.entities()[0].tasks()[0].statements()[3].cmd(),
+            &StatementCmd::Say(Value::String(String::from("Hello World")))
+        );
     }
 
     #[test]
