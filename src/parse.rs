@@ -28,8 +28,8 @@ impl SyntaxTree {
         SyntaxTree { entities }
     }
 
-    pub fn entities(&self) -> &Vec<Entity> {
-        &self.entities
+    pub fn entities(&mut self) -> &mut Vec<Entity> {
+        &mut self.entities
     }
 }
 
@@ -89,13 +89,13 @@ impl<'a> Parse<'a> for Entity {
         let (code, _) = multispace1(code)?;
         let (code, spell) = alt((tag("animate"), tag("bind"), tag("disturb")))(code)?;
 
-        println!(
-            "Summoning entity {} of kind {:?} with {} tasks, using {}.",
-            name,
-            kind,
-            tasks.len(),
-            spell
-        );
+        // println!(
+        //     "Summoning entity {} of kind {:?} with {} tasks, using {}.",
+        //     name,
+        //     kind,
+        //     tasks.len(),
+        //     spell
+        // );
 
         let active = match (kind, spell) {
             (EntityKind::Zombie, "animate") => true,
@@ -136,7 +136,7 @@ impl<'a> Parse<'a> for EntityKind {
 
 impl<'a> Parse<'a> for Task {
     fn parse(code: &'a str) -> IResult<&'a str, Task> {
-        println!("Code (task): {}", code);
+        // println!("Code (task): {}", code);
         let (code, _) = multispace0(code)?;
         let (code, _) = tag("task")(code)?;
         let (code, _) = multispace1(code)?;
@@ -159,7 +159,7 @@ impl<'a> Parse<'a> for Task {
 
 impl<'a> Parse<'a> for Statement {
     fn parse(code: &'a str) -> IResult<&'a str, Statement> {
-        println!("Code (statement): {}", code);
+        // println!("Code (statement): {}", code);
         let (code, _) = multispace0(code)?;
         let (code, cmd) = alphanumeric1(code)?;
 
@@ -175,7 +175,7 @@ impl<'a> Parse<'a> for Statement {
 
 impl<'a> Parse<'a> for Value {
     fn parse(code: &'a str) -> IResult<&'a str, Value> {
-        println!("Code (value): {}", code);
+        // println!("Code (value): {}", code);
         let (code, _) = multispace0(code)?;
         if let Ok((code, i)) = parse_integer(code) {
             Ok((code, Value::Integer(i)))
@@ -217,7 +217,7 @@ fn parse_string<'a>(code: &'a str) -> IResult<&'a str, &'a str> {
 }
 
 pub fn parse<'a>(code: &'a str) -> Result<SyntaxTree, Err<(&'a str, ErrorKind)>> {
-    match complete(|code| SyntaxTree::parse(code))(code) {
+    match complete(|code| SyntaxTree::parse(code))(&code) {
         Ok((_, tree)) => Ok(tree),
         Err(error) => Err(error),
     }
@@ -257,7 +257,7 @@ summon
 animate
 ";
 
-        let tree = parse(code).unwrap();
+        let mut tree = parse(code).unwrap();
 
         assert_eq!(tree.entities().len(), 6);
 
@@ -295,7 +295,7 @@ animate
     
 \t\t";
 
-        let tree = parse(code).unwrap();
+        let mut tree = parse(code).unwrap();
         assert_eq!(tree.entities().len(), 1);
 
         assert_eq!(tree.entities()[0].kind(), EntityKind::Zombie);
@@ -322,7 +322,7 @@ summon
     animate
 animate";
 
-        let tree = parse(code).unwrap();
+        let mut tree = parse(code).unwrap();
 
         assert_eq!(tree.entities()[0].tasks().len(), 2);
         assert_eq!(tree.entities()[0].tasks()[0].name(), "Test1");
@@ -350,7 +350,7 @@ summon
     animate
 animate";
 
-        let tree = parse(code).unwrap();
+        let mut tree = parse(code).unwrap();
 
         assert_eq!(tree.entities()[0].tasks().len(), 0);
         assert_eq!(tree.entities()[0].moan(), Value::Integer(-161));
@@ -426,7 +426,7 @@ summon
 animate
 ";
 
-        let tree = parse(code).unwrap();
+        let mut tree = parse(code).unwrap();
 
         assert_eq!(tree.entities()[0].tasks().len(), 1);
         assert_eq!(tree.entities()[0].tasks()[0].statements().len(), 4);
@@ -488,7 +488,7 @@ Beatrix is a demon
 summon
 bind";
 
-        let tree = parse(code).unwrap();
+        let mut tree = parse(code).unwrap();
 
         assert_eq!(tree.entities()[0].active(), true);
         assert_eq!(tree.entities()[0].tasks().len(), 2);

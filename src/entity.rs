@@ -56,7 +56,7 @@ impl Entity {
         &self.memory
     }
 
-    pub fn tasks<'a>(&'a self) -> &'a Vec<Task> {
-        &self.tasks
+    pub fn tasks<'a>(&'a mut self) -> &'a mut Vec<Task> {
+        &mut self.tasks
     }
 }

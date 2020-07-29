@@ -24,7 +24,7 @@ impl Task {
         self.is_active
     }
 
-    pub fn statements<'a>(&'a self) -> &'a Vec<Statement> {
-        &self.statements
+    pub fn statements<'a>(&'a mut self) -> &'a mut Vec<Statement> {
+        &mut self.statements
     }
 }
