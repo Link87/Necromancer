@@ -1,6 +1,6 @@
 use crate::statement::Statement;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Task {
     name: String,
     is_active: bool,
@@ -24,7 +24,7 @@ impl Task {
         self.is_active
     }
 
-    pub fn statements<'a>(&'a mut self) -> &'a mut Vec<Statement> {
-        &mut self.statements
+    pub fn statements<'a>(&self) -> &Vec<Statement> {
+        &self.statements
     }
 }

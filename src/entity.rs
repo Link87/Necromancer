@@ -1,7 +1,7 @@
 use crate::task::Task;
 use crate::value::Value;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Entity {
     kind: EntityKind,
     name: String,
@@ -10,7 +10,7 @@ pub struct Entity {
     tasks: Vec<Task>,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum EntityKind {
     Zombie,
     Ghost,
@@ -40,7 +40,7 @@ impl Entity {
         self.kind
     }
 
-    pub fn name<'a>(&'a self) -> &'a str {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
@@ -48,15 +48,11 @@ impl Entity {
         self.is_active
     }
 
-    pub fn remember(&mut self, value: Value) {
-        self.memory = value;
-    }
-
     pub fn moan(&self) -> &Value {
         &self.memory
     }
 
-    pub fn tasks<'a>(&'a mut self) -> &'a mut Vec<Task> {
-        &mut self.tasks
+    pub fn tasks(&self) -> &Vec<Task> {
+        &self.tasks
     }
 }

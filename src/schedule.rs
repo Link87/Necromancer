@@ -1,24 +1,51 @@
+use std::io::{self, Write};
+
 use crate::entity::Entity;
+use crate::parse::SyntaxTree;
+use crate::statement::{Statement, StatementCmd};
 
 pub struct Scheduler {}
+
+pub struct EntitySummoner<'a> {
+    entity: &'a Entity,
+}
 
 impl Scheduler {
     pub fn new() -> Scheduler {
         Scheduler {}
     }
 
-    #[tokio::main]
-    pub async fn schedule(&self, entities: &mut Vec<Entity>) {
+    #[tokio::main(flavor = "multi_thread")]
+    pub async fn schedule(&self, syntax_tree: &SyntaxTree) {
+        let entities = syntax_tree.entities();
         for entity in entities {
-            self.awaken_entity(entity).await;
+            EntitySummoner::new(entity).awaken().await;
         }
     }
+}
 
-    async fn awaken_entity(&self, entity: &mut Entity) {
-        for task in entity.tasks() {
+impl<'a> EntitySummoner<'a> {
+    fn new(entity: &Entity) -> EntitySummoner {
+        EntitySummoner { entity }
+    }
+
+    async fn awaken(&self) {
+        for task in self.entity.tasks() {
             for statement in task.statements() {
-                statement.execute();
+                execute_statement(statement);
             }
         }
+    }
+}
+
+#[allow(unused_must_use)]
+fn execute_statement(statement: &Statement) {
+    match statement.cmd() {
+        StatementCmd::Say(arg) => {
+            let stdout = io::stdout();
+            let mut handle = stdout.lock();
+            handle.write_all((format!("{}", arg)).as_bytes());
+        }
+        _ => unimplemented!()
     }
 }

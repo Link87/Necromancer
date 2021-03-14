@@ -1,5 +1,9 @@
+extern crate either;
+extern crate log;
 extern crate nom;
 extern crate tokio;
+
+use log::debug;
 
 use std::error::Error;
 use std::fs;
@@ -33,14 +37,14 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let code = fs::read_to_string(config.filename)?;
 
     match parse::parse(&code) {
-        Ok(mut syntax_tree) => {
-            // println!("{:?}", syntax_tree);
-            Scheduler::new().schedule(syntax_tree.entities());
+        Ok(syntax_tree) => {
+            debug!("{:?}", &syntax_tree);
+            Scheduler::new().schedule(&syntax_tree);
             Ok(())
         }
-        Err(error) => {
-            println!("{}", error);
-            Ok(())
-        }
+        Err(error) => Err(Box::new(nom::error::Error::new(
+            String::from(error.input),
+            error.code,
+        ))),
     }
 }
