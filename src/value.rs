@@ -19,6 +19,40 @@ impl PartialEq<Value> for &Value {
     }
 }
 
+impl From<&Value> for Value {
+    fn from(value: &Value) -> Self {
+        match value {
+            Value::Integer(i) => Value::Integer(*i),
+            Value::String(s) => Value::String(String::from(s)),
+            Value::Void => Value::Void,
+        }
+    }
+}
+
+impl From<String> for Value {
+    fn from(value: String) -> Self {
+        Value::String(value)
+    }
+}
+
+impl From<&str> for Value {
+    fn from(value: &str) -> Self {
+        Value::String(String::from(value))
+    }
+}
+
+impl From<i64> for Value {
+    fn from(value: i64) -> Self {
+        Value::Integer(value)
+    }
+}
+
+impl Default for Value {
+    fn default() -> Value {
+        Value::Void
+    }
+}
+
 impl Display for Value {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> Result {
         match self {

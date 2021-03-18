@@ -2,12 +2,14 @@ use either::*;
 use log::{debug, trace};
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_till};
-use nom::character::complete::{alphanumeric1, char, digit1, multispace0, multispace1};
-use nom::combinator::{eof, map, recognize};
+use nom::character::complete::{alpha1, alphanumeric0, char, digit1, multispace0, multispace1};
+use nom::combinator::{eof, into, map, recognize};
 use nom::error::{Error, ErrorKind};
 use nom::multi::{many0, many1, many_till};
 use nom::sequence::{delimited, pair, preceded, separated_pair, terminated, tuple};
 use nom::{Err, Finish, IResult};
+
+use std::collections::HashMap;
 
 use crate::entity::{Entity, EntityKind};
 use crate::statement::{Statement, StatementCmd};
@@ -22,16 +24,27 @@ trait Parse<'a> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SyntaxTree {
-    entities: Vec<Entity>,
+    entities: HashMap<String, Entity>,
 }
 
 impl SyntaxTree {
-    fn new(entities: Vec<Entity>) -> SyntaxTree {
+    fn new(entities: HashMap<String, Entity>) -> SyntaxTree {
         SyntaxTree { entities }
     }
 
-    pub fn entities(&self) -> &Vec<Entity> {
+    pub fn entities(&self) -> &HashMap<String, Entity> {
         &self.entities
+    }
+}
+
+impl From<Vec<Entity>> for SyntaxTree {
+    fn from(value: Vec<Entity>) -> SyntaxTree {
+        SyntaxTree {
+            entities: value
+                .into_iter()
+                .map(|e| (String::from(e.name()), e))
+                .collect(),
+        }
     }
 }
 
@@ -39,10 +52,7 @@ impl<'a> Parse<'a> for SyntaxTree {
     fn parse(code: &'a str) -> IResult<&'a str, SyntaxTree> {
         trace!("Code (syntax tree): {}", code);
         multispace0(code)?;
-        map(
-            many1(terminated(Entity::parse, alt((eof, multispace1)))),
-            SyntaxTree::new,
-        )(code)
+        into(many1(terminated(Entity::parse, alt((eof, multispace1)))))(code)
     }
 }
 
@@ -51,7 +61,7 @@ impl<'a> Parse<'a> for Entity {
         trace!("Code (entity): {}", code);
         let (code, (name, kind)) = terminated(
             separated_pair(
-                alphanumeric1,
+                parse_identifier,
                 tuple((multispace1, tag("is"), multispace1)),
                 EntityKind::parse,
             ),
@@ -95,7 +105,8 @@ impl<'a> Parse<'a> for Entity {
             .1
             .into_iter()
             .map(Either::unwrap_right)
-            .collect::<Vec<Task>>();
+            .map(|t| (String::from(t.name()), t))
+            .collect::<HashMap<String, Task>>();
 
         debug!(
             "Summoning entity {} of kind {:?} with {} tasks, using {}.",
@@ -152,7 +163,7 @@ impl<'a> Parse<'a> for Task {
         trace!("Code (task): {}", code);
         map(
             tuple((
-                preceded(pair(tag("task"), multispace1), alphanumeric1),
+                preceded(pair(tag("task"), multispace1), parse_identifier),
                 many0(preceded(multispace1, Statement::parse)),
                 preceded(
                     multispace1,
@@ -171,11 +182,23 @@ impl<'a> Parse<'a> for Statement {
             alt((
                 preceded(
                     pair(tag("say"), multispace1),
-                    map(Value::parse, StatementCmd::Say),
+                    alt((
+                        map(Value::parse, StatementCmd::Say),
+                        map(
+                            separated_pair(parse_identifier, multispace1, Value::parse),
+                            |(name, value)| StatementCmd::SayNamed(String::from(name), value),
+                        ),
+                    )),
                 ),
                 preceded(
                     pair(tag("remember"), multispace1),
-                    map(Value::parse, StatementCmd::Remember),
+                    alt((
+                        map(Value::parse, StatementCmd::Remember),
+                        map(
+                            separated_pair(parse_identifier, multispace1, Value::parse),
+                            |(name, value)| StatementCmd::RememberNamed(String::from(name), value),
+                        ),
+                    )),
                 ),
             )),
             Statement::new,
@@ -185,7 +208,7 @@ impl<'a> Parse<'a> for Statement {
 
 impl<'a> Parse<'a> for Value {
     fn parse(code: &'a str) -> IResult<&'a str, Value> {
-        println!("Code (value): {}", code);
+        trace!("Code (value): {}", code);
         alt((
             map(parse_integer, Value::Integer),
             map(parse_string, |s| Value::String(String::from(s))),
@@ -207,6 +230,10 @@ fn parse_integer<'a>(code: &'a str) -> IResult<&'a str, i64> {
 
 fn parse_string<'a>(code: &'a str) -> IResult<&'a str, &'a str> {
     delimited(char('"'), take_till(|c| c == '\"'), char('"'))(code)
+}
+
+fn parse_identifier<'a>(code: &'a str) -> IResult<&'a str, &'a str> {
+    recognize(pair(alpha1, alphanumeric0))(code)
 }
 
 pub fn parse<'a>(code: &'a str) -> Result<SyntaxTree, Error<&'a str>> {
@@ -253,29 +280,29 @@ animate";
 
         assert_eq!(tree.entities().len(), 6);
 
-        assert_eq!(tree.entities()[0].kind(), EntityKind::Zombie);
-        assert_eq!(tree.entities()[0].name(), "Peter");
-        assert_eq!(tree.entities()[0].moan(), Value::Void);
+        assert_eq!(tree.entities()["Peter"].kind(), EntityKind::Zombie);
+        assert_eq!(tree.entities()["Peter"].name(), "Peter");
+        assert_eq!(tree.entities()["Peter"].moan(), Value::Void);
 
-        assert_eq!(tree.entities()[1].kind(), EntityKind::Zombie);
-        assert_eq!(tree.entities()[1].name(), "Jay");
-        assert_eq!(tree.entities()[1].moan(), Value::Void);
+        assert_eq!(tree.entities()["Jay"].kind(), EntityKind::Zombie);
+        assert_eq!(tree.entities()["Jay"].name(), "Jay");
+        assert_eq!(tree.entities()["Jay"].moan(), Value::Void);
 
-        assert_eq!(tree.entities()[2].kind(), EntityKind::Zombie);
-        assert_eq!(tree.entities()[2].name(), "Sarah");
-        assert_eq!(tree.entities()[2].moan(), Value::Void);
+        assert_eq!(tree.entities()["Sarah"].kind(), EntityKind::Zombie);
+        assert_eq!(tree.entities()["Sarah"].name(), "Sarah");
+        assert_eq!(tree.entities()["Sarah"].moan(), Value::Void);
 
-        assert_eq!(tree.entities()[3].kind(), EntityKind::Vampire);
-        assert_eq!(tree.entities()[3].name(), "Max");
-        assert_eq!(tree.entities()[3].moan(), Value::Void);
+        assert_eq!(tree.entities()["Max"].kind(), EntityKind::Vampire);
+        assert_eq!(tree.entities()["Max"].name(), "Max");
+        assert_eq!(tree.entities()["Max"].moan(), Value::Void);
 
-        assert_eq!(tree.entities()[4].kind(), EntityKind::Djinn);
-        assert_eq!(tree.entities()[4].name(), "Anna");
-        assert_eq!(tree.entities()[4].moan(), Value::Void);
+        assert_eq!(tree.entities()["Anna"].kind(), EntityKind::Djinn);
+        assert_eq!(tree.entities()["Anna"].name(), "Anna");
+        assert_eq!(tree.entities()["Anna"].moan(), Value::Void);
 
-        assert_eq!(tree.entities()[5].kind(), EntityKind::Demon);
-        assert_eq!(tree.entities()[5].name(), "Beatrix");
-        assert_eq!(tree.entities()[5].moan(), Value::Void);
+        assert_eq!(tree.entities()["Beatrix"].kind(), EntityKind::Demon);
+        assert_eq!(tree.entities()["Beatrix"].name(), "Beatrix");
+        assert_eq!(tree.entities()["Beatrix"].moan(), Value::Void);
     }
 
     #[test]
@@ -290,9 +317,9 @@ animate";
         let tree = parse(code).unwrap();
         assert_eq!(tree.entities().len(), 1);
 
-        assert_eq!(tree.entities()[0].kind(), EntityKind::Zombie);
-        assert_eq!(tree.entities()[0].name(), "Peter");
-        assert_eq!(tree.entities()[0].moan(), Value::Void);
+        assert_eq!(tree.entities()["Peter"].kind(), EntityKind::Zombie);
+        assert_eq!(tree.entities()["Peter"].name(), "Peter");
+        assert_eq!(tree.entities()["Peter"].moan(), Value::Void);
     }
 
     #[test]
@@ -316,13 +343,13 @@ animate";
 
         let tree = parse(code).unwrap();
 
-        assert_eq!(tree.entities()[0].tasks().len(), 2);
-        assert_eq!(tree.entities()[0].tasks()[0].name(), "Test1");
-        assert_eq!(tree.entities()[0].tasks()[1].name(), "Test2");
+        assert_eq!(tree.entities()["Peter"].tasks().len(), 2);
+        assert_eq!(tree.entities()["Peter"].tasks()["Test1"].name(), "Test1");
+        assert_eq!(tree.entities()["Peter"].tasks()["Test2"].name(), "Test2");
 
-        assert_eq!(tree.entities()[0].tasks().len(), 2);
-        assert_eq!(tree.entities()[1].tasks()[0].name(), "Test3");
-        assert_eq!(tree.entities()[1].tasks()[1].name(), "Test1");
+        assert_eq!(tree.entities()["Jay"].tasks().len(), 2);
+        assert_eq!(tree.entities()["Jay"].tasks()["Test3"].name(), "Test3");
+        assert_eq!(tree.entities()["Jay"].tasks()["Test1"].name(), "Test1");
     }
 
     #[test]
@@ -344,13 +371,13 @@ animate";
 
         let tree = parse(code).unwrap();
 
-        assert_eq!(tree.entities()[0].tasks().len(), 0);
-        assert_eq!(tree.entities()[0].moan(), Value::Integer(-161));
+        assert_eq!(tree.entities()["Peter"].tasks().len(), 0);
+        assert_eq!(tree.entities()["Peter"].moan(), Value::Integer(-161));
 
-        assert_eq!(tree.entities()[1].tasks().len(), 2);
-        assert_eq!(tree.entities()[1].tasks()[0].name(), "Test1");
-        assert_eq!(tree.entities()[1].tasks()[1].name(), "Test2");
-        assert_eq!(tree.entities()[1].moan(), Value::Integer(1312));
+        assert_eq!(tree.entities()["Jay"].tasks().len(), 2);
+        assert_eq!(tree.entities()["Jay"].tasks()["Test1"].name(), "Test1");
+        assert_eq!(tree.entities()["Jay"].tasks()["Test2"].name(), "Test2");
+        assert_eq!(tree.entities()["Jay"].moan(), Value::Integer(1312));
     }
 
     #[test]
@@ -408,30 +435,103 @@ summon
         say 1312
         say \"+161\"
         say \"Hello World\"
+        say Markus -161
+        say Dorni  1312
+        say Isa \t\"Hello World\"
     animate
 animate
 ";
 
         let tree = parse(code).unwrap();
 
-        assert_eq!(tree.entities()[0].tasks().len(), 1);
-        assert_eq!(tree.entities()[0].tasks()[0].statements().len(), 4);
+        assert_eq!(tree.entities()["Peter"].tasks().len(), 1);
+        assert_eq!(tree.entities()["Peter"].tasks()["Test1"].statements().len(), 7);
 
         assert_eq!(
-            tree.entities()[0].tasks()[0].statements()[0].cmd(),
+            tree.entities()["Peter"].tasks()["Test1"].statements()[0].cmd(),
             &StatementCmd::Say(Value::Integer(-161))
         );
         assert_eq!(
-            tree.entities()[0].tasks()[0].statements()[1].cmd(),
+            tree.entities()["Peter"].tasks()["Test1"].statements()[1].cmd(),
             &StatementCmd::Say(Value::Integer(1312))
         );
         assert_eq!(
-            tree.entities()[0].tasks()[0].statements()[2].cmd(),
+            tree.entities()["Peter"].tasks()["Test1"].statements()[2].cmd(),
             &StatementCmd::Say(Value::String(String::from("+161")))
         );
         assert_eq!(
-            tree.entities()[0].tasks()[0].statements()[3].cmd(),
+            tree.entities()["Peter"].tasks()["Test1"].statements()[3].cmd(),
             &StatementCmd::Say(Value::String(String::from("Hello World")))
+        );
+        assert_eq!(
+            tree.entities()["Peter"].tasks()["Test1"].statements()[4].cmd(),
+            &StatementCmd::SayNamed(String::from("Markus"), Value::Integer(-161))
+        );
+        assert_eq!(
+            tree.entities()["Peter"].tasks()["Test1"].statements()[5].cmd(),
+            &StatementCmd::SayNamed(String::from("Dorni"), Value::Integer(1312))
+        );
+        assert_eq!(
+            tree.entities()["Peter"].tasks()["Test1"].statements()[6].cmd(),
+            &StatementCmd::SayNamed(
+                String::from("Isa"),
+                Value::String(String::from("Hello World"))
+            )
+        );
+    }
+
+    #[test]
+    fn parse_remember_value() {
+        let code = "\
+Peter is a zombie
+summon
+    task Test1
+        remember -161
+        remember 1312
+        remember \"+161\"
+        remember \"Hello World\"
+        remember Markus -161
+        remember Dorni  1312
+        remember Isa \t\"Hello World\"
+    animate
+animate
+";
+
+        let tree = parse(code).unwrap();
+
+        assert_eq!(tree.entities()["Peter"].tasks().len(), 1);
+        assert_eq!(tree.entities()["Peter"].tasks()["Test1"].statements().len(), 7);
+
+        assert_eq!(
+            tree.entities()["Peter"].tasks()["Test1"].statements()[0].cmd(),
+            &StatementCmd::Remember(Value::Integer(-161))
+        );
+        assert_eq!(
+            tree.entities()["Peter"].tasks()["Test1"].statements()[1].cmd(),
+            &StatementCmd::Remember(Value::Integer(1312))
+        );
+        assert_eq!(
+            tree.entities()["Peter"].tasks()["Test1"].statements()[2].cmd(),
+            &StatementCmd::Remember(Value::String(String::from("+161")))
+        );
+        assert_eq!(
+            tree.entities()["Peter"].tasks()["Test1"].statements()[3].cmd(),
+            &StatementCmd::Remember(Value::String(String::from("Hello World")))
+        );
+        assert_eq!(
+            tree.entities()["Peter"].tasks()["Test1"].statements()[4].cmd(),
+            &StatementCmd::RememberNamed(String::from("Markus"), Value::Integer(-161))
+        );
+        assert_eq!(
+            tree.entities()["Peter"].tasks()["Test1"].statements()[5].cmd(),
+            &StatementCmd::RememberNamed(String::from("Dorni"), Value::Integer(1312))
+        );
+        assert_eq!(
+            tree.entities()["Peter"].tasks()["Test1"].statements()[6].cmd(),
+            &StatementCmd::RememberNamed(
+                String::from("Isa"),
+                Value::String(String::from("Hello World"))
+            )
         );
     }
 
@@ -476,20 +576,20 @@ bind";
 
         let tree = parse(code).unwrap();
 
-        assert_eq!(tree.entities()[0].active(), true);
-        assert_eq!(tree.entities()[0].tasks().len(), 2);
-        assert_eq!(tree.entities()[0].tasks()[0].active(), false);
-        assert_eq!(tree.entities()[0].tasks()[1].active(), true);
+        assert_eq!(tree.entities()["Peter"].active(), true);
+        assert_eq!(tree.entities()["Peter"].tasks().len(), 2);
+        assert_eq!(tree.entities()["Peter"].tasks()["Test1"].active(), false);
+        assert_eq!(tree.entities()["Peter"].tasks()["Test2"].active(), true);
 
-        assert_eq!(tree.entities()[1].active(), false);
-        assert_eq!(tree.entities()[1].tasks().len(), 2);
-        assert_eq!(tree.entities()[1].tasks()[0].active(), true);
-        assert_eq!(tree.entities()[1].tasks()[1].active(), false);
+        assert_eq!(tree.entities()["Jay"].active(), false);
+        assert_eq!(tree.entities()["Jay"].tasks().len(), 2);
+        assert_eq!(tree.entities()["Jay"].tasks()["Test3"].active(), true);
+        assert_eq!(tree.entities()["Jay"].tasks()["Test1"].active(), false);
 
-        assert_eq!(tree.entities()[2].active(), true);
-        assert_eq!(tree.entities()[3].active(), false);
-        assert_eq!(tree.entities()[4].active(), true);
-        assert_eq!(tree.entities()[5].active(), true);
-        assert_eq!(tree.entities()[6].active(), true);
+        assert_eq!(tree.entities()["Myrte"].active(), true);
+        assert_eq!(tree.entities()["BuhHuh"].active(), false);
+        assert_eq!(tree.entities()["Max"].active(), true);
+        assert_eq!(tree.entities()["Anna"].active(), true);
+        assert_eq!(tree.entities()["Beatrix"].active(), true);
     }
 }

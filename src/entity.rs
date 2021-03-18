@@ -1,13 +1,15 @@
 use crate::task::Task;
 use crate::value::Value;
 
+use std::collections::HashMap;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Entity {
     kind: EntityKind,
     name: String,
     is_active: bool,
     memory: Value,
-    tasks: Vec<Task>,
+    tasks: HashMap<String, Task>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -25,7 +27,7 @@ impl Entity {
         name: String,
         is_active: bool,
         memory: Value,
-        tasks: Vec<Task>,
+        tasks: HashMap<String, Task>,
     ) -> Entity {
         Entity {
             kind,
@@ -52,7 +54,7 @@ impl Entity {
         &self.memory
     }
 
-    pub fn tasks(&self) -> &Vec<Task> {
+    pub fn tasks(&self) -> &HashMap<String, Task> {
         &self.tasks
     }
 }
