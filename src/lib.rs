@@ -39,7 +39,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     match parse::parse(&code) {
         Ok(syntax_tree) => {
             debug!("{:?}", &syntax_tree);
-            Scheduler::new().schedule(&syntax_tree);
+            Scheduler::new(syntax_tree).schedule();
             Ok(())
         }
         Err(error) => Err(Box::new(nom::error::Error::new(
