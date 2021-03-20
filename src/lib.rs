@@ -1,8 +1,3 @@
-extern crate either;
-extern crate log;
-extern crate nom;
-extern crate tokio;
-
 use log::debug;
 
 use std::error::Error;

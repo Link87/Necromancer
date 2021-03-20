@@ -3,7 +3,7 @@ use log::{debug, trace};
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_till};
 use nom::character::complete::{alpha1, alphanumeric0, char, digit1, multispace0, multispace1};
-use nom::combinator::{eof, into, map, recognize};
+use nom::combinator::{eof, into, map, not, peek, recognize, success};
 use nom::error::{Error, ErrorKind};
 use nom::multi::{many0, many1, many_till};
 use nom::sequence::{delimited, pair, preceded, separated_pair, terminated, tuple};
@@ -181,13 +181,30 @@ impl<'a> Parse<'a> for Statement {
         map(
             alt((
                 preceded(
-                    pair(tag("say"), multispace1),
+                    tag("banish"),
                     alt((
-                        map(Value::parse, StatementCmd::Say),
-                        map(
-                            separated_pair(parse_identifier, multispace1, Value::parse),
-                            |(name, value)| StatementCmd::SayNamed(String::from(name), value),
-                        ),
+                        map(preceded(multispace1, parse_identifier), |name| {
+                            StatementCmd::BanishNamed(String::from(name))
+                        }),
+                        success(StatementCmd::Banish),
+                    )),
+                ),
+                preceded(
+                    tag("forget"),
+                    alt((
+                        map(preceded(multispace1, parse_identifier), |name| {
+                            StatementCmd::ForgetNamed(String::from(name))
+                        }),
+                        success(StatementCmd::Forget),
+                    )),
+                ),
+                preceded(
+                    tag("invoke"),
+                    alt((
+                        map(preceded(multispace1, parse_identifier), |name| {
+                            StatementCmd::InvokeNamed(String::from(name))
+                        }),
+                        success(StatementCmd::Invoke),
                     )),
                 ),
                 preceded(
@@ -197,6 +214,16 @@ impl<'a> Parse<'a> for Statement {
                         map(
                             separated_pair(parse_identifier, multispace1, Value::parse),
                             |(name, value)| StatementCmd::RememberNamed(String::from(name), value),
+                        ),
+                    )),
+                ),
+                preceded(
+                    pair(tag("say"), multispace1),
+                    alt((
+                        map(Value::parse, StatementCmd::Say),
+                        map(
+                            separated_pair(parse_identifier, multispace1, Value::parse),
+                            |(name, value)| StatementCmd::SayNamed(String::from(name), value),
                         ),
                     )),
                 ),
@@ -233,7 +260,46 @@ fn parse_string<'a>(code: &'a str) -> IResult<&'a str, &'a str> {
 }
 
 fn parse_identifier<'a>(code: &'a str) -> IResult<&'a str, &'a str> {
+    peek(not(keyword))(code)?;
     recognize(pair(alpha1, alphanumeric0))(code)
+}
+
+fn keyword<'a>(code: &'a str) -> IResult<&'a str, &'a str> {
+    recognize(alt((
+        alt((
+            tag("zombie"),
+            tag("enslaved undead"),
+            tag("ghost"),
+            tag("restless undead"),
+            tag("vampire"),
+            tag("free-willed undead"),
+            tag("demon"),
+            tag("djin"),
+            tag("summon"),
+            tag("animate"),
+            tag("disturb"),
+            tag("bind"),
+            tag("task"),
+            tag("remember"),
+            tag("moan"),
+            tag("banish"),
+            tag("forget"),
+            tag("invoke"),
+            tag("say"),
+            tag("shamble"),
+            tag("until"),
+        )),
+        alt((
+            tag("around"),
+            tag("stumble"),
+            tag("taste"),
+            tag("good"),
+            tag("spit"),
+            tag("remembering"),
+            tag("rend"),
+            tag("turn"),
+        )),
+    )))(code)
 }
 
 pub fn parse<'a>(code: &'a str) -> Result<SyntaxTree, Error<&'a str>> {
@@ -445,7 +511,10 @@ animate
         let tree = parse(code).unwrap();
 
         assert_eq!(tree.entities()["Peter"].tasks().len(), 1);
-        assert_eq!(tree.entities()["Peter"].tasks()["Test1"].statements().len(), 7);
+        assert_eq!(
+            tree.entities()["Peter"].tasks()["Test1"].statements().len(),
+            7
+        );
 
         assert_eq!(
             tree.entities()["Peter"].tasks()["Test1"].statements()[0].cmd(),
@@ -500,7 +569,10 @@ animate
         let tree = parse(code).unwrap();
 
         assert_eq!(tree.entities()["Peter"].tasks().len(), 1);
-        assert_eq!(tree.entities()["Peter"].tasks()["Test1"].statements().len(), 7);
+        assert_eq!(
+            tree.entities()["Peter"].tasks()["Test1"].statements().len(),
+            7
+        );
 
         assert_eq!(
             tree.entities()["Peter"].tasks()["Test1"].statements()[0].cmd(),
@@ -532,6 +604,66 @@ animate
                 String::from("Isa"),
                 Value::String(String::from("Hello World"))
             )
+        );
+    }
+
+    #[test]
+    fn parse_statements() {
+        let code = "\
+Peter is a zombie
+summon
+    task Test1
+        remember -161
+        remember 1312
+        banish
+        banish Peter
+        forget Peter
+        forget
+        invoke
+        invoke Peter
+    animate
+animate
+";
+
+        let tree = parse(code).unwrap();
+
+        assert_eq!(tree.entities()["Peter"].tasks().len(), 1);
+        assert_eq!(
+            tree.entities()["Peter"].tasks()["Test1"].statements().len(),
+            8
+        );
+
+        assert_eq!(
+            tree.entities()["Peter"].tasks()["Test1"].statements()[0].cmd(),
+            &StatementCmd::Remember(Value::Integer(-161))
+        );
+        assert_eq!(
+            tree.entities()["Peter"].tasks()["Test1"].statements()[1].cmd(),
+            &StatementCmd::Remember(Value::Integer(1312))
+        );
+        assert_eq!(
+            tree.entities()["Peter"].tasks()["Test1"].statements()[2].cmd(),
+            &StatementCmd::Banish,
+        );
+        assert_eq!(
+            tree.entities()["Peter"].tasks()["Test1"].statements()[3].cmd(),
+            &StatementCmd::BanishNamed(String::from("Peter")),
+        );
+        assert_eq!(
+            tree.entities()["Peter"].tasks()["Test1"].statements()[4].cmd(),
+            &StatementCmd::ForgetNamed(String::from("Peter")),
+        );
+        assert_eq!(
+            tree.entities()["Peter"].tasks()["Test1"].statements()[5].cmd(),
+            &StatementCmd::Forget,
+        );
+        assert_eq!(
+            tree.entities()["Peter"].tasks()["Test1"].statements()[6].cmd(),
+            &StatementCmd::Invoke,
+        );
+        assert_eq!(
+            tree.entities()["Peter"].tasks()["Test1"].statements()[7].cmd(),
+            &StatementCmd::InvokeNamed(String::from("Peter")),
         );
     }
 

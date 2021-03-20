@@ -7,10 +7,20 @@ pub struct Statement {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum StatementCmd {
-    SayNamed(String, Value),
-    Say(Value),
-    RememberNamed(String, Value),
+    Animate,
+    AnimateNamed(String),
+    Banish,
+    BanishNamed(String),
+    Disturb,
+    DisturbNamed(String),
+    Forget,
+    ForgetNamed(String),
+    Invoke,
+    InvokeNamed(String),
     Remember(Value),
+    RememberNamed(String, Value),
+    Say(Value),
+    SayNamed(String, Value),
 }
 
 impl Statement {

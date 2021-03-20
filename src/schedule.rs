@@ -1,10 +1,14 @@
-use std::io::{self, Write};
 use std::sync::Arc;
 
 use dashmap::DashMap;
-use log::debug;
+use futures::stream::{FuturesUnordered, StreamExt};
+use log::{debug, error};
+use tokio::io::{self, AsyncWriteExt};
+use tokio::sync::mpsc::{self, UnboundedSender};
+use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
 
-use crate::entity::Entity;
+use crate::entity::{Entity, EntityKind};
 use crate::parse::SyntaxTree;
 use crate::statement::{Statement, StatementCmd};
 use crate::value::Value;
@@ -31,59 +35,190 @@ impl Scheduler {
         }
         debug!("{:?}", env);
 
+        let mut futures = Vec::with_capacity(entities.len());
+        let (tx, mut rx) = mpsc::unbounded_channel();
+
         for (name, _) in entities {
-            let awakened = AwakenedEntity::new(String::from(name), self.syntax_tree.clone(), env.clone());
-            tokio::spawn(awakened.execute());
+            let awakened = AwakenedEntity::new(
+                String::from(name),
+                Arc::clone(&self.syntax_tree),
+                Arc::clone(&env),
+                UnboundedSender::clone(&tx),
+            );
+            futures.push(tokio::spawn(awakened.execute()));
         }
+
+        let tasks = Arc::new(Mutex::new(
+            futures
+                .into_iter()
+                .collect::<FuturesUnordered<JoinHandle<()>>>(),
+        ));
+        let tasks_push = Arc::clone(&tasks);
+
+        // wait for messages to arrive
+        // runs indefinetly as it holds both sender and receiver refs
+        let message_handler = tokio::spawn(async move {
+            while let Some(message) = rx.recv().await {
+                match message {
+                    Message::Invoke(name) => {
+                        // spawn new entity and add to awaited futures
+                        let awakened = AwakenedEntity::new(
+                            String::from(name),
+                            Arc::clone(&self.syntax_tree),
+                            Arc::clone(&env),
+                            UnboundedSender::clone(&tx),
+                        );
+                        tasks_push
+                            .lock()
+                            .await
+                            .push(tokio::spawn(awakened.execute()));
+                    }
+                }
+            }
+        });
+
+        // iterate until a None appears, all tasks are finished then
+        while let Some(_) = tasks.lock().await.next().await {}
+
+        // Messages are no longer needed.
+        // Necessary since message does not exit on its own.
+        message_handler.abort();
     }
 }
 
-struct AwakenedEntity{
+struct AwakenedEntity {
     name: String,
     syntax_tree: Arc<SyntaxTree>,
     env: Arc<SharedEnv>,
+    sender: UnboundedSender<Message>,
 }
 
 impl AwakenedEntity {
-    fn new(name: String, syntax_tree: Arc<SyntaxTree>, env: Arc<SharedEnv>) -> AwakenedEntity {
-        AwakenedEntity { name, syntax_tree, env }
+    fn new(
+        name: String,
+        syntax_tree: Arc<SyntaxTree>,
+        env: Arc<SharedEnv>,
+        sender: UnboundedSender<Message>,
+    ) -> AwakenedEntity {
+        AwakenedEntity {
+            name,
+            syntax_tree,
+            env,
+            sender,
+        }
     }
 
     async fn execute(self) {
         let awakened = Arc::new(self);
-        for (task_name, _) in awakened.syntax_tree.entities().get(&awakened.name).unwrap().tasks() {
-            tokio::spawn(awakened.clone().execute_task(String::from(task_name)));
+        let entity = awakened.syntax_tree.entities().get(&awakened.name).unwrap();
+        match entity.kind() {
+            EntityKind::Zombie => {
+                for (task_name, _) in entity.tasks() {
+                    if let Err(e) =
+                        tokio::spawn(Arc::clone(&awakened).execute_task(String::from(task_name)))
+                            .await
+                    {
+                        error!("{}", e);
+                    }
+                }
+            }
+            _ => unimplemented!(),
         }
     }
 
     async fn execute_task(self: Arc<AwakenedEntity>, task_name: String) {
-        for statement in self.syntax_tree.entities().get(&self.name).unwrap().tasks().get(&task_name).unwrap().statements() {
-           execute_statement(&self.env, &self.name, statement);
+        for statement in self
+            .syntax_tree
+            .entities()
+            .get(&self.name)
+            .unwrap()
+            .tasks()
+            .get(&task_name)
+            .unwrap()
+            .statements()
+        {
+            execute_statement(&self.env, &self.name, &self.sender, statement).await;
+            tokio::task::yield_now().await;
         }
     }
 }
 
-#[allow(unused_must_use)]
-fn execute_statement(env: &Arc<SharedEnv>, entity_name: &str, statement: &Statement) {
+//#[allow(unused_must_use)]
+async fn execute_statement(
+    env: &Arc<SharedEnv>,
+    entity_name: &str,
+    sender: &UnboundedSender<Message>,
+    statement: &Statement,
+) {
     match statement.cmd() {
         StatementCmd::SayNamed(_, arg) | StatementCmd::Say(arg) => {
-            let stdout = io::stdout();
-            let mut handle = stdout.lock();
-            handle.write_all((format!("{}\n", arg)).as_bytes());
-        }
-        StatementCmd::RememberNamed(name, value) => {
-            env.entities().alter(name, |_, mut data| {
-                *data.value_mut() = Value::from(value);
-                data
-            });
+            let mut stdout = io::stdout();
+            stdout
+                .write_all((format!("{}\n", arg)).as_bytes())
+                .await
+                .expect("Could not output text!");
         }
         StatementCmd::Remember(value) => {
+            debug!("{} remembering {} (self)\n", entity_name, value);
             env.entities().alter(entity_name, |_, mut data| {
                 *data.value_mut() = Value::from(value);
                 data
             });
         }
+        StatementCmd::RememberNamed(name, value) => {
+            debug!("{} remembering {}", name, value);
+            env.entities().alter(name, |_, mut data| {
+                *data.value_mut() = Value::from(value);
+                data
+            });
+        }
+        StatementCmd::Banish => {
+            debug!("{} banishing itself", entity_name);
+            env.entities().alter(entity_name, |_, mut data| {
+                *data.active_mut() = false;
+                data
+            });
+        }
+        StatementCmd::BanishNamed(name) => {
+            debug!("{} banishing {}", entity_name, name);
+            env.entities().alter(name, |_, mut data| {
+                *data.active_mut() = false;
+                data
+            });
+        }
+        StatementCmd::Forget => {
+            debug!("{} forgets its value", entity_name);
+            env.entities().alter(entity_name, |_, mut data| {
+                *data.value_mut() = Value::default();
+                data
+            });
+        }
+        StatementCmd::ForgetNamed(name) => {
+            debug!("{} makes {} forget its value", entity_name, name);
+            env.entities().alter(name, |_, mut data| {
+                *data.value_mut() = Value::default();
+                data
+            });
+        }
+        StatementCmd::Invoke => {
+            debug!("{} invoking a new copy of itself\n", entity_name);
+            sender
+                .send(Message::Invoke(String::from(entity_name)))
+                .expect("Message receiver dropped before task could finish!");
+        }
+        StatementCmd::InvokeNamed(name) => {
+            debug!("{} invoking a new copy of {}", entity_name, name);
+            sender
+                .send(Message::Invoke(String::from(name)))
+                .expect("Message receiver dropped before task could finish!");
+        }
+        _ => unimplemented!(),
     }
+}
+
+#[derive(Debug, Clone)]
+enum Message {
+    Invoke(String),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -105,11 +240,11 @@ impl SharedEnv {
 
 /// Holds owned data of an entity.
 ///
-/// Is a reduced version of `crate::entity::Entity` that allows mutability,
+/// Is a reduced version of [`Entity`] that allows mutability,
 /// for keeping track of entity data while executing code.
 ///
-/// Given an `crate::entity::Entity`, an instance of `EntityData` can be
-/// created using `EntityData::from`.
+/// Given an [`Entity`], an instance of [`EntityData`] can be
+/// created using [`EntityData::from`].
 #[derive(Clone, Debug, Default)]
 struct EntityData {
     value: Value,
@@ -121,11 +256,19 @@ impl EntityData {
         EntityData { value, active }
     }
 
+    fn _value(&self) -> &Value {
+        &self.value
+    }
+
+    fn _active(&self) -> &bool {
+        &self.active
+    }
+
     fn value_mut(&mut self) -> &mut Value {
         &mut self.value
     }
 
-    fn _active_mut(&mut self) -> &mut bool {
+    fn active_mut(&mut self) -> &mut bool {
         &mut self.active
     }
 }
