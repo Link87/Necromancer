@@ -1,3 +1,4 @@
+use std::ops::Not;
 use std::sync::Arc;
 
 use dashmap::DashMap;
@@ -5,7 +6,7 @@ use futures::stream::{FuturesUnordered, StreamExt};
 use log::{debug, error};
 use tokio::io::{self, AsyncWriteExt};
 use tokio::sync::mpsc::{self, UnboundedSender};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Notify};
 use tokio::task::JoinHandle;
 
 use crate::entity::{Entity, EntityKind};
@@ -23,21 +24,21 @@ impl Scheduler {
             syntax_tree: Arc::new(syntax_tree),
         }
     }
-
+    
     #[tokio::main(flavor = "multi_thread")]
     pub async fn schedule(self) {
         let entities = self.syntax_tree.entities();
-
+        
         let env = Arc::new(SharedEnv::new());
         for (name, entity) in entities {
             env.entities()
-                .insert(String::from(name), EntityData::from(entity));
+            .insert(String::from(name), EntityData::from(entity));
         }
         debug!("{:?}", env);
-
+        
         let mut futures = Vec::with_capacity(entities.len());
         let (tx, mut rx) = mpsc::unbounded_channel();
-
+                
         for (name, _) in entities {
             let awakened = AwakenedEntity::new(
                 String::from(name),
@@ -47,14 +48,14 @@ impl Scheduler {
             );
             futures.push(tokio::spawn(awakened.execute()));
         }
-
+        
         let tasks = Arc::new(Mutex::new(
             futures
-                .into_iter()
-                .collect::<FuturesUnordered<JoinHandle<()>>>(),
+            .into_iter()
+            .collect::<FuturesUnordered<JoinHandle<()>>>(),
         ));
         let tasks_push = Arc::clone(&tasks);
-
+        
         // wait for messages to arrive
         // runs indefinetly as it holds both sender and receiver refs
         let message_handler = tokio::spawn(async move {
@@ -137,68 +138,89 @@ impl AwakenedEntity {
             .unwrap()
             .statements()
         {
-            execute_statement(&self.env, &self.name, &self.sender, statement).await;
+            loop {
+                if self.env.entities().get(&self.name).unwrap().active() {
+                    break;
+                } else {
+                    self.env.notifier().notified().await;
+                }
+            }
+            execute_statement(
+                &self.env,
+                &self.name,
+                &self.syntax_tree,
+                &self.sender,
+                statement,
+            )
+            .await;
             tokio::task::yield_now().await;
         }
     }
 }
 
-//#[allow(unused_must_use)]
 async fn execute_statement(
     env: &Arc<SharedEnv>,
     entity_name: &str,
+    syntax_tree: &Arc<SyntaxTree>,
     sender: &UnboundedSender<Message>,
     statement: &Statement,
 ) {
     match statement.cmd() {
-        StatementCmd::SayNamed(_, arg) | StatementCmd::Say(arg) => {
-            let mut stdout = io::stdout();
-            stdout
-                .write_all((format!("{}\n", arg)).as_bytes())
-                .await
-                .expect("Could not output text!");
+        StatementCmd::Animate => {
+            let entity_kind = syntax_tree.entities().get(entity_name).unwrap().kind();
+            debug!(
+                "{} (Kind {}) tries to animate itself (wtf?)",
+                entity_name, entity_kind,
+            );
+            if matches!(entity_kind, EntityKind::Zombie) {
+                set_active(env, entity_name, true);
+            }
         }
-        StatementCmd::Remember(value) => {
-            debug!("{} remembering {} (self)\n", entity_name, value);
-            env.entities().alter(entity_name, |_, mut data| {
-                *data.value_mut() = Value::from(value);
-                data
-            });
-        }
-        StatementCmd::RememberNamed(name, value) => {
-            debug!("{} remembering {}", name, value);
-            env.entities().alter(name, |_, mut data| {
-                *data.value_mut() = Value::from(value);
-                data
-            });
+        StatementCmd::AnimateNamed(other_name) => {
+            let entity_kind = syntax_tree.entities().get(other_name).unwrap().kind();
+            debug!(
+                "{} tries to animate {} (Kind {})",
+                entity_name, other_name, entity_kind
+            );
+            if matches!(entity_kind, EntityKind::Zombie) {
+                set_active(env, other_name, true);
+            }
         }
         StatementCmd::Banish => {
             debug!("{} banishing itself", entity_name);
-            env.entities().alter(entity_name, |_, mut data| {
-                *data.active_mut() = false;
-                data
-            });
+            set_active(env, entity_name, false);
         }
-        StatementCmd::BanishNamed(name) => {
-            debug!("{} banishing {}", entity_name, name);
-            env.entities().alter(name, |_, mut data| {
-                *data.active_mut() = false;
-                data
-            });
+        StatementCmd::BanishNamed(other_name) => {
+            debug!("{} banishing {}", entity_name, other_name);
+            set_active(env, other_name, false);
+        }
+        StatementCmd::Disturb => {
+            let entity_kind = syntax_tree.entities().get(entity_name).unwrap().kind();
+            debug!(
+                "{} (Kind {}) tries to disturb itself (wtf?)",
+                entity_name, entity_kind,
+            );
+            if matches!(entity_kind, EntityKind::Ghost) {
+                set_active(env, entity_name, true);
+            }
+        }
+        StatementCmd::DisturbNamed(other_name) => {
+            let entity_kind = syntax_tree.entities().get(other_name).unwrap().kind();
+            debug!(
+                "{} tries to disturb {} (Kind {})",
+                entity_name, other_name, entity_kind,
+            );
+            if matches!(entity_kind, EntityKind::Ghost) {
+                set_active(env, other_name, true);
+            }
         }
         StatementCmd::Forget => {
             debug!("{} forgets its value", entity_name);
-            env.entities().alter(entity_name, |_, mut data| {
-                *data.value_mut() = Value::default();
-                data
-            });
+            set_value(env, entity_name, &Value::default())
         }
-        StatementCmd::ForgetNamed(name) => {
-            debug!("{} makes {} forget its value", entity_name, name);
-            env.entities().alter(name, |_, mut data| {
-                *data.value_mut() = Value::default();
-                data
-            });
+        StatementCmd::ForgetNamed(other_name) => {
+            debug!("{} makes {} forget its value", entity_name, other_name);
+            set_value(env, other_name, &Value::default())
         }
         StatementCmd::Invoke => {
             debug!("{} invoking a new copy of itself\n", entity_name);
@@ -206,14 +228,45 @@ async fn execute_statement(
                 .send(Message::Invoke(String::from(entity_name)))
                 .expect("Message receiver dropped before task could finish!");
         }
-        StatementCmd::InvokeNamed(name) => {
-            debug!("{} invoking a new copy of {}", entity_name, name);
+        StatementCmd::InvokeNamed(other_name) => {
+            debug!("{} invoking a new copy of {}", entity_name, other_name);
             sender
-                .send(Message::Invoke(String::from(name)))
+                .send(Message::Invoke(String::from(other_name)))
                 .expect("Message receiver dropped before task could finish!");
         }
-        _ => unimplemented!(),
+        StatementCmd::Remember(value) => {
+            debug!("{} remembering {} (self)\n", entity_name, value);
+            set_value(env, entity_name, value)
+        }
+        StatementCmd::RememberNamed(other_name, value) => {
+            debug!("{} remembering {}", other_name, value);
+            set_value(env, other_name, value)
+        }
+        StatementCmd::SayNamed(_, arg) | StatementCmd::Say(arg) => {
+            let mut stdout = io::stdout();
+            stdout
+                .write_all((format!("{}\n", arg)).as_bytes())
+                .await
+                .expect("Could not output text!");
+        }
     }
+}
+
+fn set_active(env: &Arc<SharedEnv>, entity_name: &str, active: bool) {
+    env.entities().alter(entity_name, |_, mut data| {
+        *data.active_mut() = active;
+        data
+    });
+    if active {
+        env.notifier().notify_waiters();
+    }
+}
+
+fn set_value(env: &Arc<SharedEnv>, entity_name: &str, value: &Value) {
+    env.entities().alter(entity_name, |_, mut data| {
+        *data.value_mut() = Value::from(value);
+        data
+    });
 }
 
 #[derive(Debug, Clone)]
@@ -221,20 +274,26 @@ enum Message {
     Invoke(String),
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 struct SharedEnv {
     entities: DashMap<String, EntityData>,
+    notifier: Notify,
 }
 
 impl SharedEnv {
     fn new() -> SharedEnv {
         SharedEnv {
             entities: DashMap::new(),
+            notifier: Notify::new(),
         }
     }
 
     fn entities(&self) -> &DashMap<String, EntityData> {
         &self.entities
+    }
+
+    fn notifier(&self) -> &Notify {
+        &self.notifier
     }
 }
 
@@ -260,8 +319,8 @@ impl EntityData {
         &self.value
     }
 
-    fn _active(&self) -> &bool {
-        &self.active
+    fn active(&self) -> bool {
+        self.active
     }
 
     fn value_mut(&mut self) -> &mut Value {

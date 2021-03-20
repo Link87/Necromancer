@@ -181,12 +181,32 @@ impl<'a> Parse<'a> for Statement {
         map(
             alt((
                 preceded(
+                    // TOOD
+                    tag("animatex"),
+                    alt((
+                        map(preceded(multispace1, parse_identifier), |name| {
+                            StatementCmd::AnimateNamed(String::from(name))
+                        }),
+                        success(StatementCmd::Animate),
+                    )),
+                ),
+                preceded(
                     tag("banish"),
                     alt((
                         map(preceded(multispace1, parse_identifier), |name| {
                             StatementCmd::BanishNamed(String::from(name))
                         }),
                         success(StatementCmd::Banish),
+                    )),
+                ),
+                preceded(
+                    // TOOD
+                    tag("disturbx"),
+                    alt((
+                        map(preceded(multispace1, parse_identifier), |name| {
+                            StatementCmd::DisturbNamed(String::from(name))
+                        }),
+                        success(StatementCmd::Disturb),
                     )),
                 ),
                 preceded(

@@ -2,6 +2,7 @@ use crate::task::Task;
 use crate::value::Value;
 
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter, Result};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Entity {
@@ -56,5 +57,17 @@ impl Entity {
 
     pub fn tasks(&self) -> &HashMap<String, Task> {
         &self.tasks
+    }
+}
+
+impl Display for EntityKind {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result {
+        match self {
+            EntityKind::Zombie => write!(fmt, "Zombie"),
+            EntityKind::Ghost => write!(fmt, "Ghost"),
+            EntityKind::Vampire => write!(fmt, "Vampire"),
+            EntityKind::Demon => write!(fmt, "Demon"),
+            EntityKind::Djinn => write!(fmt, "Djinn"),
+        }
     }
 }
