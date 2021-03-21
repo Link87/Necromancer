@@ -1,8 +1,9 @@
 use crate::task::Task;
 use crate::value::Value;
 
-use std::collections::HashMap;
 use std::fmt::{Display, Formatter, Result};
+
+use indexmap::IndexMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Entity {
@@ -10,7 +11,7 @@ pub struct Entity {
     name: String,
     is_active: bool,
     memory: Value,
-    tasks: HashMap<String, Task>,
+    tasks: IndexMap<String, Task>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -28,7 +29,7 @@ impl Entity {
         name: String,
         is_active: bool,
         memory: Value,
-        tasks: HashMap<String, Task>,
+        tasks: IndexMap<String, Task>,
     ) -> Entity {
         Entity {
             kind,
@@ -55,7 +56,7 @@ impl Entity {
         &self.memory
     }
 
-    pub fn tasks(&self) -> &HashMap<String, Task> {
+    pub fn tasks(&self) -> &IndexMap<String, Task> {
         &self.tasks
     }
 }

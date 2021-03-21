@@ -1,4 +1,7 @@
+use std::collections::HashMap;
+
 use either::*;
+use indexmap::IndexMap;
 use log::{debug, trace};
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_till};
@@ -8,8 +11,6 @@ use nom::error::{Error, ErrorKind};
 use nom::multi::{many0, many1, many_till};
 use nom::sequence::{delimited, pair, preceded, separated_pair, terminated, tuple};
 use nom::{Err, Finish, IResult};
-
-use std::collections::HashMap;
 
 use crate::entity::{Entity, EntityKind};
 use crate::statement::{Statement, StatementCmd};
@@ -39,12 +40,12 @@ impl SyntaxTree {
 
 impl From<Vec<Entity>> for SyntaxTree {
     fn from(value: Vec<Entity>) -> SyntaxTree {
-        SyntaxTree {
-            entities: value
+        SyntaxTree::new(
+            value
                 .into_iter()
                 .map(|e| (String::from(e.name()), e))
                 .collect(),
-        }
+        )
     }
 }
 
@@ -106,7 +107,7 @@ impl<'a> Parse<'a> for Entity {
             .into_iter()
             .map(Either::unwrap_right)
             .map(|t| (String::from(t.name()), t))
-            .collect::<HashMap<String, Task>>();
+            .collect::<IndexMap<String, Task>>();
 
         debug!(
             "Summoning entity {} of kind {:?} with {} tasks, using {}.",

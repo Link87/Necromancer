@@ -15,6 +15,9 @@ dashmap = "4.0.2"
 either = "1.6.1"
 env_logger = "0.8.3"
 futures = "0.3.13"
+indexmap = "1.6.2"
+lazy_static = "1.4.0"
 log = "0.4.14"
 nom = "6.1.2"
+rand = { version = "0.8.3", features = ["small_rng"] }
 tokio = { version = "1.4.0", features = ["io-std", "io-util", "macros", "rt-multi-thread", "sync", "time"] }
