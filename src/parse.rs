@@ -301,4 +301,3 @@ pub fn parse<'a>(code: &'a str) -> Result<Recipe, Error<&'a str>> {
         Err(error) => Err(error),
     }
 }
-

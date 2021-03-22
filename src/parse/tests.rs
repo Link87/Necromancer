@@ -32,29 +32,50 @@ animate";
 
     assert_eq!(recipe.creatures().len(), 6);
 
-    assert_eq!(recipe.creatures().get("Peter").unwrap().species(), Species::Zombie);
+    assert_eq!(
+        recipe.creatures().get("Peter").unwrap().species(),
+        Species::Zombie
+    );
     assert_eq!(recipe.creatures().get("Peter").unwrap().name(), "Peter");
     assert_eq!(recipe.creatures().get("Peter").unwrap().moan(), Value::Void);
 
-    assert_eq!(recipe.creatures().get("Jay").unwrap().species(), Species::Zombie);
+    assert_eq!(
+        recipe.creatures().get("Jay").unwrap().species(),
+        Species::Zombie
+    );
     assert_eq!(recipe.creatures().get("Jay").unwrap().name(), "Jay");
     assert_eq!(recipe.creatures().get("Jay").unwrap().moan(), Value::Void);
 
-    assert_eq!(recipe.creatures().get("Sarah").unwrap().species(), Species::Zombie);
+    assert_eq!(
+        recipe.creatures().get("Sarah").unwrap().species(),
+        Species::Zombie
+    );
     assert_eq!(recipe.creatures().get("Sarah").unwrap().name(), "Sarah");
     assert_eq!(recipe.creatures().get("Sarah").unwrap().moan(), Value::Void);
 
-    assert_eq!(recipe.creatures().get("Max").unwrap().species(), Species::Vampire);
+    assert_eq!(
+        recipe.creatures().get("Max").unwrap().species(),
+        Species::Vampire
+    );
     assert_eq!(recipe.creatures().get("Max").unwrap().name(), "Max");
     assert_eq!(recipe.creatures().get("Max").unwrap().moan(), Value::Void);
 
-    assert_eq!(recipe.creatures().get("Anna").unwrap().species(), Species::Djinn);
+    assert_eq!(
+        recipe.creatures().get("Anna").unwrap().species(),
+        Species::Djinn
+    );
     assert_eq!(recipe.creatures().get("Anna").unwrap().name(), "Anna");
     assert_eq!(recipe.creatures().get("Anna").unwrap().moan(), Value::Void);
 
-    assert_eq!(recipe.creatures().get("Beatrix").unwrap().species(), Species::Demon);
+    assert_eq!(
+        recipe.creatures().get("Beatrix").unwrap().species(),
+        Species::Demon
+    );
     assert_eq!(recipe.creatures().get("Beatrix").unwrap().name(), "Beatrix");
-    assert_eq!(recipe.creatures().get("Beatrix").unwrap().moan(), Value::Void);
+    assert_eq!(
+        recipe.creatures().get("Beatrix").unwrap().moan(),
+        Value::Void
+    );
 }
 
 #[test]
@@ -69,7 +90,10 @@ fn skip_whitespace() {
     let recipe = parse(code).unwrap();
     assert_eq!(recipe.creatures().len(), 1);
 
-    assert_eq!(recipe.creatures().get("Peter").unwrap().species(), Species::Zombie);
+    assert_eq!(
+        recipe.creatures().get("Peter").unwrap().species(),
+        Species::Zombie
+    );
     assert_eq!(recipe.creatures().get("Peter").unwrap().name(), "Peter");
     assert_eq!(recipe.creatures().get("Peter").unwrap().moan(), Value::Void);
 }
@@ -96,12 +120,52 @@ animate";
     let recipe = parse(code).unwrap();
 
     assert_eq!(recipe.creatures().get("Peter").unwrap().tasks().len(), 2);
-    assert_eq!(recipe.creatures().get("Peter").unwrap().tasks().get("Test1").unwrap().name(), "Test1");
-    assert_eq!(recipe.creatures().get("Peter").unwrap().tasks().get("Test2").unwrap().name(), "Test2");
+    assert_eq!(
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .name(),
+        "Test1"
+    );
+    assert_eq!(
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test2")
+            .unwrap()
+            .name(),
+        "Test2"
+    );
 
     assert_eq!(recipe.creatures().get("Jay").unwrap().tasks().len(), 2);
-    assert_eq!(recipe.creatures().get("Jay").unwrap().tasks().get("Test3").unwrap().name(), "Test3");
-    assert_eq!(recipe.creatures().get("Jay").unwrap().tasks().get("Test1").unwrap().name(), "Test1");
+    assert_eq!(
+        recipe
+            .creatures()
+            .get("Jay")
+            .unwrap()
+            .tasks()
+            .get("Test3")
+            .unwrap()
+            .name(),
+        "Test3"
+    );
+    assert_eq!(
+        recipe
+            .creatures()
+            .get("Jay")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .name(),
+        "Test1"
+    );
 }
 
 #[test]
@@ -124,12 +188,38 @@ animate";
     let recipe = parse(code).unwrap();
 
     assert_eq!(recipe.creatures().get("Peter").unwrap().tasks().len(), 0);
-    assert_eq!(recipe.creatures().get("Peter").unwrap().moan(), Value::Integer(-161));
+    assert_eq!(
+        recipe.creatures().get("Peter").unwrap().moan(),
+        Value::Integer(-161)
+    );
 
     assert_eq!(recipe.creatures().get("Jay").unwrap().tasks().len(), 2);
-    assert_eq!(recipe.creatures().get("Jay").unwrap().tasks().get("Test1").unwrap().name(), "Test1");
-    assert_eq!(recipe.creatures().get("Jay").unwrap().tasks().get("Test2").unwrap().name(), "Test2");
-    assert_eq!(recipe.creatures().get("Jay").unwrap().moan(), Value::Integer(1312));
+    assert_eq!(
+        recipe
+            .creatures()
+            .get("Jay")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .name(),
+        "Test1"
+    );
+    assert_eq!(
+        recipe
+            .creatures()
+            .get("Jay")
+            .unwrap()
+            .tasks()
+            .get("Test2")
+            .unwrap()
+            .name(),
+        "Test2"
+    );
+    assert_eq!(
+        recipe.creatures().get("Jay").unwrap().moan(),
+        Value::Integer(1312)
+    );
 }
 
 #[test]
@@ -198,36 +288,107 @@ animate
 
     assert_eq!(recipe.creatures().get("Peter").unwrap().tasks().len(), 1);
     assert_eq!(
-        recipe.creatures().get("Peter").unwrap().tasks().get("Test1").unwrap().statements().len(),
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .len(),
         7
     );
 
     assert_eq!(
-        recipe.creatures().get("Peter").unwrap().tasks().get("Test1").unwrap().statements().get(0).unwrap(),
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(0)
+            .unwrap(),
         &Statement::Say(Value::Integer(-161))
     );
     assert_eq!(
-        recipe.creatures().get("Peter").unwrap().tasks().get("Test1").unwrap().statements().get(1).unwrap(),
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(1)
+            .unwrap(),
         &Statement::Say(Value::Integer(1312))
     );
     assert_eq!(
-        recipe.creatures().get("Peter").unwrap().tasks().get("Test1").unwrap().statements().get(2).unwrap(),
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(2)
+            .unwrap(),
         &Statement::Say(Value::String(String::from("+161")))
     );
     assert_eq!(
-        recipe.creatures().get("Peter").unwrap().tasks().get("Test1").unwrap().statements().get(3).unwrap(),
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(3)
+            .unwrap(),
         &Statement::Say(Value::String(String::from("Hello World")))
     );
     assert_eq!(
-        recipe.creatures().get("Peter").unwrap().tasks().get("Test1").unwrap().statements().get(4).unwrap(),
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(4)
+            .unwrap(),
         &Statement::SayNamed(String::from("Markus"), Value::Integer(-161))
     );
     assert_eq!(
-        recipe.creatures().get("Peter").unwrap().tasks().get("Test1").unwrap().statements().get(5).unwrap(),
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(5)
+            .unwrap(),
         &Statement::SayNamed(String::from("Dorni"), Value::Integer(1312))
     );
     assert_eq!(
-        recipe.creatures().get("Peter").unwrap().tasks().get("Test1").unwrap().statements().get(6).unwrap(),
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(6)
+            .unwrap(),
         &Statement::SayNamed(
             String::from("Isa"),
             Value::String(String::from("Hello World"))
@@ -256,36 +417,107 @@ animate
 
     assert_eq!(recipe.creatures().get("Peter").unwrap().tasks().len(), 1);
     assert_eq!(
-        recipe.creatures().get("Peter").unwrap().tasks().get("Test1").unwrap().statements().len(),
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .len(),
         7
     );
 
     assert_eq!(
-        recipe.creatures().get("Peter").unwrap().tasks().get("Test1").unwrap().statements().get(0).unwrap(),
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(0)
+            .unwrap(),
         &Statement::Remember(Value::Integer(-161))
     );
     assert_eq!(
-        recipe.creatures().get("Peter").unwrap().tasks().get("Test1").unwrap().statements().get(1).unwrap(),
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(1)
+            .unwrap(),
         &Statement::Remember(Value::Integer(1312))
     );
     assert_eq!(
-        recipe.creatures().get("Peter").unwrap().tasks().get("Test1").unwrap().statements().get(2).unwrap(),
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(2)
+            .unwrap(),
         &Statement::Remember(Value::String(String::from("+161")))
     );
     assert_eq!(
-        recipe.creatures().get("Peter").unwrap().tasks().get("Test1").unwrap().statements().get(3).unwrap(),
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(3)
+            .unwrap(),
         &Statement::Remember(Value::String(String::from("Hello World")))
     );
     assert_eq!(
-        recipe.creatures().get("Peter").unwrap().tasks().get("Test1").unwrap().statements().get(4).unwrap(),
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(4)
+            .unwrap(),
         &Statement::RememberNamed(String::from("Markus"), Value::Integer(-161))
     );
     assert_eq!(
-        recipe.creatures().get("Peter").unwrap().tasks().get("Test1").unwrap().statements().get(5).unwrap(),
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(5)
+            .unwrap(),
         &Statement::RememberNamed(String::from("Dorni"), Value::Integer(1312))
     );
     assert_eq!(
-        recipe.creatures().get("Peter").unwrap().tasks().get("Test1").unwrap().statements().get(6).unwrap(),
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(6)
+            .unwrap(),
         &Statement::RememberNamed(
             String::from("Isa"),
             Value::String(String::from("Hello World"))
@@ -315,40 +547,120 @@ animate
 
     assert_eq!(recipe.creatures().get("Peter").unwrap().tasks().len(), 1);
     assert_eq!(
-        recipe.creatures().get("Peter").unwrap().tasks().get("Test1").unwrap().statements().len(),
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .len(),
         8
     );
 
     assert_eq!(
-        recipe.creatures().get("Peter").unwrap().tasks().get("Test1").unwrap().statements().get(0).unwrap(),
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(0)
+            .unwrap(),
         &Statement::Remember(Value::Integer(-161))
     );
     assert_eq!(
-        recipe.creatures().get("Peter").unwrap().tasks().get("Test1").unwrap().statements().get(1).unwrap(),
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(1)
+            .unwrap(),
         &Statement::Remember(Value::Integer(1312))
     );
     assert_eq!(
-        recipe.creatures().get("Peter").unwrap().tasks().get("Test1").unwrap().statements().get(2).unwrap(),
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(2)
+            .unwrap(),
         &Statement::Banish,
     );
     assert_eq!(
-        recipe.creatures().get("Peter").unwrap().tasks().get("Test1").unwrap().statements().get(3).unwrap(),
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(3)
+            .unwrap(),
         &Statement::BanishNamed(String::from("Peter")),
     );
     assert_eq!(
-        recipe.creatures().get("Peter").unwrap().tasks().get("Test1").unwrap().statements().get(4).unwrap(),
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(4)
+            .unwrap(),
         &Statement::ForgetNamed(String::from("Peter")),
     );
     assert_eq!(
-        recipe.creatures().get("Peter").unwrap().tasks().get("Test1").unwrap().statements().get(5).unwrap(),
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(5)
+            .unwrap(),
         &Statement::Forget,
     );
     assert_eq!(
-        recipe.creatures().get("Peter").unwrap().tasks().get("Test1").unwrap().statements().get(6).unwrap(),
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(6)
+            .unwrap(),
         &Statement::Invoke,
     );
     assert_eq!(
-        recipe.creatures().get("Peter").unwrap().tasks().get("Test1").unwrap().statements().get(7).unwrap(),
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(7)
+            .unwrap(),
         &Statement::InvokeNamed(String::from("Peter")),
     );
 }
@@ -396,13 +708,53 @@ bind";
 
     assert_eq!(recipe.creatures().get("Peter").unwrap().active(), true);
     assert_eq!(recipe.creatures().get("Peter").unwrap().tasks().len(), 2);
-    assert_eq!(recipe.creatures().get("Peter").unwrap().tasks().get("Test1").unwrap().active(), false);
-    assert_eq!(recipe.creatures().get("Peter").unwrap().tasks().get("Test2").unwrap().active(), true);
+    assert_eq!(
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .active(),
+        false
+    );
+    assert_eq!(
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test2")
+            .unwrap()
+            .active(),
+        true
+    );
 
     assert_eq!(recipe.creatures().get("Jay").unwrap().active(), false);
     assert_eq!(recipe.creatures().get("Jay").unwrap().tasks().len(), 2);
-    assert_eq!(recipe.creatures().get("Jay").unwrap().tasks().get("Test3").unwrap().active(), true);
-    assert_eq!(recipe.creatures().get("Jay").unwrap().tasks().get("Test1").unwrap().active(), false);
+    assert_eq!(
+        recipe
+            .creatures()
+            .get("Jay")
+            .unwrap()
+            .tasks()
+            .get("Test3")
+            .unwrap()
+            .active(),
+        true
+    );
+    assert_eq!(
+        recipe
+            .creatures()
+            .get("Jay")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .active(),
+        false
+    );
 
     assert_eq!(recipe.creatures().get("Myrte").unwrap().active(), true);
     assert_eq!(recipe.creatures().get("BuhHuh").unwrap().active(), false);

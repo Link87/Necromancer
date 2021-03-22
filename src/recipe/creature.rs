@@ -1,11 +1,11 @@
-use super::task::Task;
-use crate::value::Value;
-
 use std::borrow::Borrow;
 use std::fmt::{Display, Formatter, Result};
 use std::hash::{Hash, Hasher};
 
 use indexmap::IndexSet;
+
+use super::task::Task;
+use crate::value::Value;
 
 #[derive(Debug, Clone)]
 pub struct Creature {

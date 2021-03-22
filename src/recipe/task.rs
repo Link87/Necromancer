@@ -1,7 +1,7 @@
-use super::statement::Statement;
-
 use std::borrow::Borrow;
 use std::hash::{Hash, Hasher};
+
+use super::statement::Statement;
 
 #[derive(Debug, Clone)]
 pub struct Task {

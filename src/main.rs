@@ -1,8 +1,7 @@
-use log::{error, info};
-
 use std::env;
 use std::process;
 
+use log::{error, info};
 use necromancer::Config;
 
 fn main() {

@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use dashmap::{DashMap, DashSet};
 use futures::future::{self, AbortHandle, Abortable};
@@ -9,7 +10,6 @@ use rand::distributions::{Distribution, Uniform};
 use rand::rngs::SmallRng;
 use rand::seq::index;
 use rand::{Rng, SeedableRng};
-use std::time::Duration;
 use tokio::io::{self, AsyncWriteExt};
 use tokio::sync::mpsc::{self, UnboundedSender};
 use tokio::sync::{Mutex, Notify, RwLock};
@@ -17,8 +17,8 @@ use tokio::task::JoinHandle;
 use tokio::time;
 
 use crate::recipe::creature::{Creature, Species};
-use crate::recipe::Recipe;
 use crate::recipe::statement::Statement;
+use crate::recipe::Recipe;
 use crate::value::Value;
 
 lazy_static! {
@@ -89,7 +89,8 @@ impl Scheduler {
                 interval.tick().await;
                 debug!("Watchdog tick.");
                 if env_watchdog.creatures().iter().all(|c| {
-                    !c.value().active() || Arc::strong_count(&candles_watchdog.get(c.key()).unwrap()) <= 1
+                    !c.value().active()
+                        || Arc::strong_count(&candles_watchdog.get(c.key()).unwrap()) <= 1
                 }) {
                     warn!("Watchdog triggered! Aborting: only inactive tasks left.");
                     for handle in abort_handles_watchdog.read().await.iter() {
@@ -166,7 +167,11 @@ impl AwakenedEntity {
 
     async fn execute(self, _candle: Arc<String>) {
         let awakened = Arc::new(self);
-        let creature = awakened.recipe.creatures().get(awakened.name.as_str()).unwrap();
+        let creature = awakened
+            .recipe
+            .creatures()
+            .get(awakened.name.as_str())
+            .unwrap();
         match creature.species() {
             Species::Zombie => {
                 for task in creature.tasks() {
@@ -196,7 +201,8 @@ impl AwakenedEntity {
             }
             Species::Vampire => {
                 let mut rng = SmallRng::from_entropy();
-                let sample = index::sample(&mut rng, creature.tasks().len(), creature.tasks().len());
+                let sample =
+                    index::sample(&mut rng, creature.tasks().len(), creature.tasks().len());
                 for index in sample {
                     let task = creature.tasks().get_index(index).unwrap();
                     if let Err(e) =
@@ -210,10 +216,15 @@ impl AwakenedEntity {
             Species::Demon => {
                 let mut rng = SmallRng::from_entropy();
                 let mut sample =
-                    index::sample(&mut rng, creature.tasks().len(), creature.tasks().len()).into_vec();
+                    index::sample(&mut rng, creature.tasks().len(), creature.tasks().len())
+                        .into_vec();
                 for _ in 0..=DEMON_RESAMPLE_COUNT_RNG_DISTRIBUTION.sample(&mut rng) {
                     let resample_size = rng.gen_range(0..=creature.tasks().len() / 3);
-                    sample.extend(index::sample(&mut rng, creature.tasks().len(), resample_size));
+                    sample.extend(index::sample(
+                        &mut rng,
+                        creature.tasks().len(),
+                        resample_size,
+                    ));
                 }
 
                 debug!("Demon task order {:?}", &sample);
@@ -291,14 +302,7 @@ impl AwakenedEntity {
                     self.env.notifier().notified().await;
                 }
             }
-            execute_statement(
-                &self.env,
-                &self.name,
-                &self.recipe,
-                &self.sender,
-                statement,
-            )
-            .await;
+            execute_statement(&self.env, &self.name, &self.recipe, &self.sender, statement).await;
             tokio::task::yield_now().await;
         }
     }
@@ -323,7 +327,11 @@ async fn execute_statement(
             }
         }
         Statement::AnimateNamed(other_name) => {
-            let species = recipe.creatures().get(other_name.as_str()).unwrap().species();
+            let species = recipe
+                .creatures()
+                .get(other_name.as_str())
+                .unwrap()
+                .species();
             debug!(
                 "{} tries to animate {} (Species {})",
                 entity_name, other_name, species
@@ -351,7 +359,11 @@ async fn execute_statement(
             }
         }
         Statement::DisturbNamed(other_name) => {
-            let species = recipe.creatures().get(other_name.as_str()).unwrap().species();
+            let species = recipe
+                .creatures()
+                .get(other_name.as_str())
+                .unwrap()
+                .species();
             debug!(
                 "{} tries to disturb {} (Species {})",
                 entity_name, other_name, species,
