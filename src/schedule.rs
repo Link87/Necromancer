@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use dashmap::DashMap;
-use futures::future;
+use dashmap::{DashMap, DashSet};
+use futures::future::{self, AbortHandle, Abortable};
 use futures::stream::{FuturesUnordered, StreamExt};
 use lazy_static::lazy_static;
-use log::{debug, error};
+use log::{debug, error, warn};
 use rand::distributions::{Distribution, Uniform};
 use rand::rngs::SmallRng;
 use rand::seq::index;
@@ -12,7 +12,7 @@ use rand::{Rng, SeedableRng};
 use std::time::Duration;
 use tokio::io::{self, AsyncWriteExt};
 use tokio::sync::mpsc::{self, UnboundedSender};
-use tokio::sync::{Mutex, Notify};
+use tokio::sync::{Mutex, Notify, RwLock};
 use tokio::task::JoinHandle;
 use tokio::time;
 
@@ -51,6 +51,11 @@ impl Scheduler {
         let mut futures = Vec::with_capacity(entities.len());
         let (tx, mut rx) = mpsc::unbounded_channel();
 
+        // for aborting
+        let abort_handles = Arc::new(RwLock::new(Vec::with_capacity(entities.len())));
+        // count how many copies of an entity are alive
+        let candles: Arc<DashSet<Arc<String>>> = Arc::new(DashSet::new());
+
         for (name, _) in entities {
             let awakened = AwakenedEntity::new(
                 String::from(name),
@@ -58,24 +63,51 @@ impl Scheduler {
                 Arc::clone(&env),
                 UnboundedSender::clone(&tx),
             );
-            futures.push(tokio::spawn(awakened.execute()));
-        }
+            let candle = Arc::new(String::from(name));
+            candles.insert(Arc::clone(&candle));
 
-        // TODO watchdog
+            let (handle, registration) = AbortHandle::new_pair();
+            abort_handles.write().await.push(handle);
+
+            let future = Abortable::new(tokio::spawn(awakened.execute(candle)), registration);
+            futures.push(future);
+        }
 
         let tasks = Arc::new(Mutex::new(
             futures
                 .into_iter()
-                .collect::<FuturesUnordered<JoinHandle<()>>>(),
+                .collect::<FuturesUnordered<Abortable<JoinHandle<()>>>>(),
         ));
-        let tasks_push = Arc::clone(&tasks);
+
+        // kill program if every entity is inactive
+        let syntax_tree_watchdog = Arc::clone(&self.syntax_tree);
+        let abort_handles_watchdog = Arc::clone(&abort_handles);
+        let candles_watchdog = Arc::clone(&candles);
+        let watchdog = tokio::spawn(async move {
+            let mut interval = time::interval(Duration::from_secs(1));
+            loop {
+                interval.tick().await;
+                debug!("Watchdog tick.");
+                if syntax_tree_watchdog.entities().iter().all(|(n, e)| {
+                    !e.active() || Arc::strong_count(&candles_watchdog.get(n).unwrap()) <= 1
+                }) {
+                    warn!("Watchdog triggered! Aborting: only inactive tasks left.");
+                    for handle in abort_handles_watchdog.read().await.iter() {
+                        handle.abort()
+                    }
+                }
+            }
+        });
 
         // wait for messages to arrive
         // runs indefinetly as it holds both sender and receiver refs
+        let tasks_message_handler = Arc::clone(&tasks);
+        let abort_handles_message_handler = Arc::clone(&abort_handles);
+        let candles_message_handler = Arc::clone(&candles);
         let message_handler = tokio::spawn(async move {
             while let Some(message) = rx.recv().await {
                 match message {
-                    Message::Invoke(name) => {
+                    Message::Invoke(ref name) => {
                         // spawn new entity and add to awaited futures
                         let awakened = AwakenedEntity::new(
                             String::from(name),
@@ -83,10 +115,16 @@ impl Scheduler {
                             Arc::clone(&env),
                             UnboundedSender::clone(&tx),
                         );
-                        tasks_push
-                            .lock()
-                            .await
-                            .push(tokio::spawn(awakened.execute()));
+                        let candle: Arc<String> =
+                            Arc::clone(&candles_message_handler.get(name).unwrap());
+
+                        let (handle, registration) = AbortHandle::new_pair();
+                        abort_handles_message_handler.write().await.push(handle);
+
+                        tasks_message_handler.lock().await.push(Abortable::new(
+                            tokio::spawn(awakened.execute(candle)),
+                            registration,
+                        ));
                     }
                 }
             }
@@ -94,6 +132,9 @@ impl Scheduler {
 
         // iterate until a None appears, all tasks are finished then
         while let Some(_) = tasks.lock().await.next().await {}
+
+        // watchdog useless now
+        watchdog.abort();
 
         // Messages are no longer needed.
         // Necessary since message does not exit on its own.
@@ -123,7 +164,7 @@ impl AwakenedEntity {
         }
     }
 
-    async fn execute(self) {
+    async fn execute(self, _candle: Arc<String>) {
         let awakened = Arc::new(self);
         let entity = awakened.syntax_tree.entities().get(&awakened.name).unwrap();
         match entity.kind() {
@@ -146,6 +187,7 @@ impl AwakenedEntity {
                     {
                         error!("{}", e);
                     }
+
                     time::sleep(Duration::from_millis(
                         GHOST_RNG_DISTRIBUTION.sample(&mut rng),
                     ))
@@ -204,8 +246,10 @@ impl AwakenedEntity {
                 let mut rng = SmallRng::from_entropy();
                 let sample_size = rng.gen_range(1..=10 * entity.tasks().len());
                 let distribution: Uniform<usize> = Uniform::from(0..entity.tasks().len());
-                let mut sample: Vec<usize> =
-                    distribution.sample_iter(&mut rng).take(sample_size).collect();
+                let mut sample: Vec<usize> = distribution
+                    .sample_iter(&mut rng)
+                    .take(sample_size)
+                    .collect();
 
                 debug!("Djinn task order {:?}", &sample);
                 while !sample.is_empty() {
