@@ -16,9 +16,9 @@ use tokio::sync::{Mutex, Notify, RwLock};
 use tokio::task::JoinHandle;
 use tokio::time;
 
-use crate::entity::{Entity, EntityKind};
-use crate::parse::SyntaxTree;
-use crate::statement::{Statement, StatementCmd};
+use crate::recipe::creature::{Creature, Species};
+use crate::recipe::Recipe;
+use crate::recipe::statement::Statement;
 use crate::value::Value;
 
 lazy_static! {
@@ -27,43 +27,43 @@ lazy_static! {
 }
 
 pub struct Scheduler {
-    syntax_tree: Arc<SyntaxTree>,
+    recipe: Arc<Recipe>,
 }
 
 impl Scheduler {
-    pub fn new(syntax_tree: SyntaxTree) -> Scheduler {
+    pub fn new(recipe: Recipe) -> Scheduler {
         Scheduler {
-            syntax_tree: Arc::new(syntax_tree),
+            recipe: Arc::new(recipe),
         }
     }
 
     #[tokio::main(flavor = "multi_thread")]
     pub async fn schedule(self) {
-        let entities = self.syntax_tree.entities();
+        let creatures = self.recipe.creatures();
 
         let env = Arc::new(SharedEnv::new());
-        for (name, entity) in entities {
-            env.entities()
-                .insert(String::from(name), EntityData::from(entity));
+        for creature in creatures {
+            env.creatures()
+                .insert(String::from(creature.name()), EntityData::from(creature));
         }
         debug!("{:?}", env);
 
-        let mut futures = Vec::with_capacity(entities.len());
+        let mut futures = Vec::with_capacity(creatures.len());
         let (tx, mut rx) = mpsc::unbounded_channel();
 
         // for aborting
-        let abort_handles = Arc::new(RwLock::new(Vec::with_capacity(entities.len())));
+        let abort_handles = Arc::new(RwLock::new(Vec::with_capacity(creatures.len())));
         // count how many copies of an entity are alive
         let candles: Arc<DashSet<Arc<String>>> = Arc::new(DashSet::new());
 
-        for (name, _) in entities {
+        for creature in creatures {
             let awakened = AwakenedEntity::new(
-                String::from(name),
-                Arc::clone(&self.syntax_tree),
+                String::from(creature.name()),
+                Arc::clone(&self.recipe),
                 Arc::clone(&env),
                 UnboundedSender::clone(&tx),
             );
-            let candle = Arc::new(String::from(name));
+            let candle = Arc::new(String::from(creature.name()));
             candles.insert(Arc::clone(&candle));
 
             let (handle, registration) = AbortHandle::new_pair();
@@ -80,7 +80,7 @@ impl Scheduler {
         ));
 
         // kill program if every entity is inactive
-        let syntax_tree_watchdog = Arc::clone(&self.syntax_tree);
+        let env_watchdog = Arc::clone(&env);
         let abort_handles_watchdog = Arc::clone(&abort_handles);
         let candles_watchdog = Arc::clone(&candles);
         let watchdog = tokio::spawn(async move {
@@ -88,8 +88,8 @@ impl Scheduler {
             loop {
                 interval.tick().await;
                 debug!("Watchdog tick.");
-                if syntax_tree_watchdog.entities().iter().all(|(n, e)| {
-                    !e.active() || Arc::strong_count(&candles_watchdog.get(n).unwrap()) <= 1
+                if env_watchdog.creatures().iter().all(|c| {
+                    !c.value().active() || Arc::strong_count(&candles_watchdog.get(c.key()).unwrap()) <= 1
                 }) {
                     warn!("Watchdog triggered! Aborting: only inactive tasks left.");
                     for handle in abort_handles_watchdog.read().await.iter() {
@@ -111,7 +111,7 @@ impl Scheduler {
                         // spawn new entity and add to awaited futures
                         let awakened = AwakenedEntity::new(
                             String::from(name),
-                            Arc::clone(&self.syntax_tree),
+                            Arc::clone(&self.recipe),
                             Arc::clone(&env),
                             UnboundedSender::clone(&tx),
                         );
@@ -144,7 +144,7 @@ impl Scheduler {
 
 struct AwakenedEntity {
     name: String,
-    syntax_tree: Arc<SyntaxTree>,
+    recipe: Arc<Recipe>,
     env: Arc<SharedEnv>,
     sender: UnboundedSender<Message>,
 }
@@ -152,13 +152,13 @@ struct AwakenedEntity {
 impl AwakenedEntity {
     fn new(
         name: String,
-        syntax_tree: Arc<SyntaxTree>,
+        recipe: Arc<Recipe>,
         env: Arc<SharedEnv>,
         sender: UnboundedSender<Message>,
     ) -> AwakenedEntity {
         AwakenedEntity {
             name,
-            syntax_tree,
+            recipe,
             env,
             sender,
         }
@@ -166,23 +166,23 @@ impl AwakenedEntity {
 
     async fn execute(self, _candle: Arc<String>) {
         let awakened = Arc::new(self);
-        let entity = awakened.syntax_tree.entities().get(&awakened.name).unwrap();
-        match entity.kind() {
-            EntityKind::Zombie => {
-                for (task_name, _) in entity.tasks() {
+        let creature = awakened.recipe.creatures().get(awakened.name.as_str()).unwrap();
+        match creature.species() {
+            Species::Zombie => {
+                for task in creature.tasks() {
                     if let Err(e) =
-                        tokio::spawn(Arc::clone(&awakened).execute_task(String::from(task_name)))
+                        tokio::spawn(Arc::clone(&awakened).execute_task(String::from(task.name())))
                             .await
                     {
                         error!("{}", e);
                     }
                 }
             }
-            EntityKind::Ghost => {
+            Species::Ghost => {
                 let mut rng = SmallRng::from_entropy();
-                for (task_name, _) in entity.tasks() {
+                for task in creature.tasks() {
                     if let Err(e) =
-                        tokio::spawn(Arc::clone(&awakened).execute_task(String::from(task_name)))
+                        tokio::spawn(Arc::clone(&awakened).execute_task(String::from(task.name())))
                             .await
                     {
                         error!("{}", e);
@@ -194,26 +194,26 @@ impl AwakenedEntity {
                     .await;
                 }
             }
-            EntityKind::Vampire => {
+            Species::Vampire => {
                 let mut rng = SmallRng::from_entropy();
-                let sample = index::sample(&mut rng, entity.tasks().len(), entity.tasks().len());
+                let sample = index::sample(&mut rng, creature.tasks().len(), creature.tasks().len());
                 for index in sample {
-                    let (task_name, _) = entity.tasks().get_index(index).unwrap();
+                    let task = creature.tasks().get_index(index).unwrap();
                     if let Err(e) =
-                        tokio::spawn(Arc::clone(&awakened).execute_task(String::from(task_name)))
+                        tokio::spawn(Arc::clone(&awakened).execute_task(String::from(task.name())))
                             .await
                     {
                         error!("{}", e);
                     }
                 }
             }
-            EntityKind::Demon => {
+            Species::Demon => {
                 let mut rng = SmallRng::from_entropy();
                 let mut sample =
-                    index::sample(&mut rng, entity.tasks().len(), entity.tasks().len()).into_vec();
+                    index::sample(&mut rng, creature.tasks().len(), creature.tasks().len()).into_vec();
                 for _ in 0..=DEMON_RESAMPLE_COUNT_RNG_DISTRIBUTION.sample(&mut rng) {
-                    let resample_size = rng.gen_range(0..=entity.tasks().len() / 3);
-                    sample.extend(index::sample(&mut rng, entity.tasks().len(), resample_size));
+                    let resample_size = rng.gen_range(0..=creature.tasks().len() / 3);
+                    sample.extend(index::sample(&mut rng, creature.tasks().len(), resample_size));
                 }
 
                 debug!("Demon task order {:?}", &sample);
@@ -228,9 +228,9 @@ impl AwakenedEntity {
                     let mut tasks = Vec::new();
                     for _ in 1..=rng.gen_range(1..=(f32::ceil(sample.len() as f32 / 5.0) as i64)) {
                         let selected = sample.pop().unwrap();
-                        let (task_name, _) = entity.tasks().get_index(selected).unwrap();
+                        let task = creature.tasks().get_index(selected).unwrap();
                         tasks.push(tokio::spawn(
-                            Arc::clone(&awakened).execute_task(String::from(task_name)),
+                            Arc::clone(&awakened).execute_task(String::from(task.name())),
                         ));
                     }
                     for e in future::join_all(tasks)
@@ -242,10 +242,10 @@ impl AwakenedEntity {
                     }
                 }
             }
-            EntityKind::Djinn => {
+            Species::Djinn => {
                 let mut rng = SmallRng::from_entropy();
-                let sample_size = rng.gen_range(1..=10 * entity.tasks().len());
-                let distribution: Uniform<usize> = Uniform::from(0..entity.tasks().len());
+                let sample_size = rng.gen_range(1..=10 * creature.tasks().len());
+                let distribution: Uniform<usize> = Uniform::from(0..creature.tasks().len());
                 let mut sample: Vec<usize> = distribution
                     .sample_iter(&mut rng)
                     .take(sample_size)
@@ -256,9 +256,9 @@ impl AwakenedEntity {
                     let mut tasks = Vec::new();
                     for _ in 1..=rng.gen_range(1..=(f32::ceil(sample.len() as f32 / 5.0) as i64)) {
                         let selected = sample.pop().unwrap();
-                        let (task_name, _) = entity.tasks().get_index(selected).unwrap();
+                        let task = creature.tasks().get_index(selected).unwrap();
                         tasks.push(tokio::spawn(
-                            Arc::clone(&awakened).execute_task(String::from(task_name)),
+                            Arc::clone(&awakened).execute_task(String::from(task.name())),
                         ));
                     }
                     for e in future::join_all(tasks)
@@ -275,17 +275,17 @@ impl AwakenedEntity {
 
     async fn execute_task(self: Arc<AwakenedEntity>, task_name: String) {
         for statement in self
-            .syntax_tree
-            .entities()
-            .get(&self.name)
+            .recipe
+            .creatures()
+            .get(self.name.as_str())
             .unwrap()
             .tasks()
-            .get(&task_name)
+            .get(task_name.as_str())
             .unwrap()
             .statements()
         {
             loop {
-                if self.env.entities().get(&self.name).unwrap().active() {
+                if self.env.creatures().get(&self.name).unwrap().active() {
                     break;
                 } else {
                     self.env.notifier().notified().await;
@@ -294,7 +294,7 @@ impl AwakenedEntity {
             execute_statement(
                 &self.env,
                 &self.name,
-                &self.syntax_tree,
+                &self.recipe,
                 &self.sender,
                 statement,
             )
@@ -307,88 +307,88 @@ impl AwakenedEntity {
 async fn execute_statement(
     env: &Arc<SharedEnv>,
     entity_name: &str,
-    syntax_tree: &Arc<SyntaxTree>,
+    recipe: &Arc<Recipe>,
     sender: &UnboundedSender<Message>,
     statement: &Statement,
 ) {
-    match statement.cmd() {
-        StatementCmd::Animate => {
-            let entity_kind = syntax_tree.entities().get(entity_name).unwrap().kind();
+    match statement {
+        Statement::Animate => {
+            let species = recipe.creatures().get(entity_name).unwrap().species();
             debug!(
-                "{} (Kind {}) tries to animate itself (wtf?)",
-                entity_name, entity_kind,
+                "{} (Species {}) tries to animate itself (wtf?)",
+                entity_name, species,
             );
-            if matches!(entity_kind, EntityKind::Zombie) {
+            if matches!(species, Species::Zombie) {
                 set_active(env, entity_name, true);
             }
         }
-        StatementCmd::AnimateNamed(other_name) => {
-            let entity_kind = syntax_tree.entities().get(other_name).unwrap().kind();
+        Statement::AnimateNamed(other_name) => {
+            let species = recipe.creatures().get(other_name.as_str()).unwrap().species();
             debug!(
-                "{} tries to animate {} (Kind {})",
-                entity_name, other_name, entity_kind
+                "{} tries to animate {} (Species {})",
+                entity_name, other_name, species
             );
-            if matches!(entity_kind, EntityKind::Zombie) {
+            if matches!(species, Species::Zombie) {
                 set_active(env, other_name, true);
             }
         }
-        StatementCmd::Banish => {
+        Statement::Banish => {
             debug!("{} banishing itself", entity_name);
             set_active(env, entity_name, false);
         }
-        StatementCmd::BanishNamed(other_name) => {
+        Statement::BanishNamed(other_name) => {
             debug!("{} banishing {}", entity_name, other_name);
             set_active(env, other_name, false);
         }
-        StatementCmd::Disturb => {
-            let entity_kind = syntax_tree.entities().get(entity_name).unwrap().kind();
+        Statement::Disturb => {
+            let species = recipe.creatures().get(entity_name).unwrap().species();
             debug!(
-                "{} (Kind {}) tries to disturb itself (wtf?)",
-                entity_name, entity_kind,
+                "{} (Species {}) tries to disturb itself (wtf?)",
+                entity_name, species,
             );
-            if matches!(entity_kind, EntityKind::Ghost) {
+            if matches!(species, Species::Ghost) {
                 set_active(env, entity_name, true);
             }
         }
-        StatementCmd::DisturbNamed(other_name) => {
-            let entity_kind = syntax_tree.entities().get(other_name).unwrap().kind();
+        Statement::DisturbNamed(other_name) => {
+            let species = recipe.creatures().get(other_name.as_str()).unwrap().species();
             debug!(
-                "{} tries to disturb {} (Kind {})",
-                entity_name, other_name, entity_kind,
+                "{} tries to disturb {} (Species {})",
+                entity_name, other_name, species,
             );
-            if matches!(entity_kind, EntityKind::Ghost) {
+            if matches!(species, Species::Ghost) {
                 set_active(env, other_name, true);
             }
         }
-        StatementCmd::Forget => {
+        Statement::Forget => {
             debug!("{} forgets its value", entity_name);
             set_value(env, entity_name, &Value::default())
         }
-        StatementCmd::ForgetNamed(other_name) => {
+        Statement::ForgetNamed(other_name) => {
             debug!("{} makes {} forget its value", entity_name, other_name);
             set_value(env, other_name, &Value::default())
         }
-        StatementCmd::Invoke => {
+        Statement::Invoke => {
             debug!("{} invoking a new copy of itself", entity_name);
             sender
                 .send(Message::Invoke(String::from(entity_name)))
                 .expect("Message receiver dropped before task could finish!");
         }
-        StatementCmd::InvokeNamed(other_name) => {
+        Statement::InvokeNamed(other_name) => {
             debug!("{} invoking a new copy of {}", entity_name, other_name);
             sender
                 .send(Message::Invoke(String::from(other_name)))
                 .expect("Message receiver dropped before task could finish!");
         }
-        StatementCmd::Remember(value) => {
+        Statement::Remember(value) => {
             debug!("{} remembering {} (self)", entity_name, value);
             set_value(env, entity_name, value)
         }
-        StatementCmd::RememberNamed(other_name, value) => {
+        Statement::RememberNamed(other_name, value) => {
             debug!("{} remembering {}", other_name, value);
             set_value(env, other_name, value)
         }
-        StatementCmd::SayNamed(_, arg) | StatementCmd::Say(arg) => {
+        Statement::SayNamed(_, arg) | Statement::Say(arg) => {
             let mut stdout = io::stdout();
             stdout
                 .write_all((format!("{}\n", arg)).as_bytes())
@@ -399,7 +399,7 @@ async fn execute_statement(
 }
 
 fn set_active(env: &Arc<SharedEnv>, entity_name: &str, active: bool) {
-    env.entities().alter(entity_name, |_, mut data| {
+    env.creatures().alter(entity_name, |_, mut data| {
         *data.active_mut() = active;
         data
     });
@@ -409,7 +409,7 @@ fn set_active(env: &Arc<SharedEnv>, entity_name: &str, active: bool) {
 }
 
 fn set_value(env: &Arc<SharedEnv>, entity_name: &str, value: &Value) {
-    env.entities().alter(entity_name, |_, mut data| {
+    env.creatures().alter(entity_name, |_, mut data| {
         *data.value_mut() = Value::from(value);
         data
     });
@@ -422,20 +422,20 @@ enum Message {
 
 #[derive(Debug, Default)]
 struct SharedEnv {
-    entities: DashMap<String, EntityData>,
+    creatures: DashMap<String, EntityData>,
     notifier: Notify,
 }
 
 impl SharedEnv {
     fn new() -> SharedEnv {
         SharedEnv {
-            entities: DashMap::new(),
+            creatures: DashMap::new(),
             notifier: Notify::new(),
         }
     }
 
-    fn entities(&self) -> &DashMap<String, EntityData> {
-        &self.entities
+    fn creatures(&self) -> &DashMap<String, EntityData> {
+        &self.creatures
     }
 
     fn notifier(&self) -> &Notify {
@@ -478,8 +478,8 @@ impl EntityData {
     }
 }
 
-impl From<&Entity> for EntityData {
-    fn from(entity: &Entity) -> EntityData {
-        EntityData::new(Value::from(entity.moan()), entity.active())
+impl From<&Creature> for EntityData {
+    fn from(creature: &Creature) -> EntityData {
+        EntityData::new(Value::from(creature.moan()), creature.active())
     }
 }

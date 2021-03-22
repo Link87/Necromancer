@@ -3,14 +3,12 @@ use log::debug;
 use std::error::Error;
 use std::fs;
 
-pub mod entity;
+pub mod recipe;
 pub mod parse;
-pub mod schedule;
-pub mod statement;
-pub mod task;
+pub mod summoner;
 pub mod value;
 
-use schedule::Scheduler;
+use summoner::Scheduler;
 
 pub struct Config {
     pub filename: String,

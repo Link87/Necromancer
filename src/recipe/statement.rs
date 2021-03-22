@@ -1,12 +1,7 @@
 use crate::value::Value;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Statement {
-    cmd: StatementCmd,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum StatementCmd {
+pub enum Statement {
     Animate,
     AnimateNamed(String),
     Banish,
@@ -21,14 +16,4 @@ pub enum StatementCmd {
     RememberNamed(String, Value),
     Say(Value),
     SayNamed(String, Value),
-}
-
-impl Statement {
-    pub fn new(cmd: StatementCmd) -> Statement {
-        Statement { cmd }
-    }
-
-    pub fn cmd<'a>(&'a self) -> &'a StatementCmd {
-        &self.cmd
-    }
 }
