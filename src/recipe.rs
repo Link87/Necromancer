@@ -4,6 +4,7 @@ use std::iter::FromIterator;
 use creature::Creature;
 
 pub mod creature;
+pub mod expression;
 pub mod statement;
 pub mod task;
 

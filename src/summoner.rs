@@ -17,6 +17,7 @@ use tokio::task::JoinHandle;
 use tokio::time;
 
 use crate::recipe::creature::{Creature, Species};
+use crate::recipe::expression::Expression;
 use crate::recipe::statement::Statement;
 use crate::recipe::Recipe;
 use crate::value::Value;
@@ -374,11 +375,11 @@ async fn execute_statement(
         }
         Statement::Forget => {
             debug!("{} forgets its value", entity_name);
-            set_value(env, entity_name, &Value::default())
+            set_value(env, entity_name, Value::default())
         }
         Statement::ForgetNamed(other_name) => {
             debug!("{} makes {} forget its value", entity_name, other_name);
-            set_value(env, other_name, &Value::default())
+            set_value(env, other_name, Value::default())
         }
         Statement::Invoke => {
             debug!("{} invoking a new copy of itself", entity_name);
@@ -392,22 +393,29 @@ async fn execute_statement(
                 .send(Message::Invoke(String::from(other_name)))
                 .expect("Message receiver dropped before task could finish!");
         }
-        Statement::Remember(value) => {
+        Statement::Remember(exprs) => {
+            let value = evaluate_expressions(exprs);
             debug!("{} remembering {} (self)", entity_name, value);
             set_value(env, entity_name, value)
         }
-        Statement::RememberNamed(other_name, value) => {
+        Statement::RememberNamed(other_name, exprs) => {
+            let value = evaluate_expressions(exprs);
             debug!("{} remembering {}", other_name, value);
             set_value(env, other_name, value)
         }
-        Statement::SayNamed(_, arg) | Statement::Say(arg) => {
+        Statement::SayNamed(_, exprs) | Statement::Say(exprs) => {
+            let value = evaluate_expressions(exprs);
             let mut stdout = io::stdout();
             stdout
-                .write_all((format!("{}\n", arg)).as_bytes())
+                .write_all((format!("{}\n", value)).as_bytes())
                 .await
                 .expect("Could not output text!");
         }
     }
+}
+
+fn evaluate_expressions(expr: &Vec<Expression>) -> Value {
+    todo!()
 }
 
 fn set_active(env: &Arc<SharedEnv>, entity_name: &str, active: bool) {
@@ -420,9 +428,9 @@ fn set_active(env: &Arc<SharedEnv>, entity_name: &str, active: bool) {
     }
 }
 
-fn set_value(env: &Arc<SharedEnv>, entity_name: &str, value: &Value) {
+fn set_value(env: &Arc<SharedEnv>, entity_name: &str, value: Value) {
     env.creatures().alter(entity_name, |_, mut data| {
-        *data.value_mut() = Value::from(value);
+        *data.value_mut() = value;
         data
     });
 }

@@ -1,8 +1,15 @@
 use super::*;
+use crate::recipe::expression::Expression;
 use crate::value::Value;
+
+fn init() {
+    let _ = env_logger::builder().is_test(true).try_init();
+}
 
 #[test]
 fn parse_creatures() {
+    init();
+
     let code = "\
 Peter is a zombie
 summon
@@ -80,6 +87,8 @@ animate";
 
 #[test]
 fn skip_whitespace() {
+    init();
+
     let code = "\
 
    Peter is a zombie\tsummon
@@ -100,6 +109,8 @@ fn skip_whitespace() {
 
 #[test]
 fn parse_tasks() {
+    init();
+
     let code = "\
 Peter is a zombie
 summon
@@ -170,6 +181,8 @@ animate";
 
 #[test]
 fn parse_remember() {
+    init();
+
     let code = "\
 Peter is a zombie
 summon
@@ -224,6 +237,8 @@ animate";
 
 #[test]
 fn parse_i64() {
+    init();
+
     let (_, num) = parse_integer("2341").unwrap();
     assert_eq!(num, 2341);
 
@@ -236,6 +251,8 @@ fn parse_i64() {
 
 #[test]
 fn parse_str() {
+    init();
+
     let (_, s) = parse_string("\"\"").unwrap();
     assert_eq!(s, "");
 
@@ -248,6 +265,8 @@ fn parse_str() {
 
 #[test]
 fn parse_value() {
+    init();
+
     let (_, num) = Value::parse("2341").unwrap();
     assert_eq!(num, Value::Integer(2341));
 
@@ -269,6 +288,8 @@ fn parse_value() {
 
 #[test]
 fn parse_say_value() {
+    init();
+
     let code = "\
 Peter is a zombie
 summon
@@ -311,7 +332,7 @@ animate
             .statements()
             .get(0)
             .unwrap(),
-        &Statement::Say(Value::Integer(-161))
+        &Statement::Say(vec![Expression::Value(Value::Integer(-161))])
     );
     assert_eq!(
         recipe
@@ -324,7 +345,7 @@ animate
             .statements()
             .get(1)
             .unwrap(),
-        &Statement::Say(Value::Integer(1312))
+        &Statement::Say(vec![Expression::Value(Value::Integer(1312))])
     );
     assert_eq!(
         recipe
@@ -337,7 +358,7 @@ animate
             .statements()
             .get(2)
             .unwrap(),
-        &Statement::Say(Value::String(String::from("+161")))
+        &Statement::Say(vec![Expression::Value(Value::String(String::from("+161")))])
     );
     assert_eq!(
         recipe
@@ -350,7 +371,9 @@ animate
             .statements()
             .get(3)
             .unwrap(),
-        &Statement::Say(Value::String(String::from("Hello World")))
+        &Statement::Say(vec![Expression::Value(Value::String(String::from(
+            "Hello World"
+        )))])
     );
     assert_eq!(
         recipe
@@ -363,7 +386,10 @@ animate
             .statements()
             .get(4)
             .unwrap(),
-        &Statement::SayNamed(String::from("Markus"), Value::Integer(-161))
+        &Statement::SayNamed(
+            String::from("Markus"),
+            vec![Expression::Value(Value::Integer(-161))]
+        )
     );
     assert_eq!(
         recipe
@@ -376,7 +402,10 @@ animate
             .statements()
             .get(5)
             .unwrap(),
-        &Statement::SayNamed(String::from("Dorni"), Value::Integer(1312))
+        &Statement::SayNamed(
+            String::from("Dorni"),
+            vec![Expression::Value(Value::Integer(1312))]
+        )
     );
     assert_eq!(
         recipe
@@ -391,13 +420,17 @@ animate
             .unwrap(),
         &Statement::SayNamed(
             String::from("Isa"),
-            Value::String(String::from("Hello World"))
+            vec![Expression::Value(Value::String(String::from(
+                "Hello World"
+            )))]
         )
     );
 }
 
 #[test]
 fn parse_remember_value() {
+    init();
+
     let code = "\
 Peter is a zombie
 summon
@@ -440,7 +473,7 @@ animate
             .statements()
             .get(0)
             .unwrap(),
-        &Statement::Remember(Value::Integer(-161))
+        &Statement::Remember(vec![Expression::Value(Value::Integer(-161))])
     );
     assert_eq!(
         recipe
@@ -453,7 +486,7 @@ animate
             .statements()
             .get(1)
             .unwrap(),
-        &Statement::Remember(Value::Integer(1312))
+        &Statement::Remember(vec![Expression::Value(Value::Integer(1312))])
     );
     assert_eq!(
         recipe
@@ -466,7 +499,7 @@ animate
             .statements()
             .get(2)
             .unwrap(),
-        &Statement::Remember(Value::String(String::from("+161")))
+        &Statement::Remember(vec![Expression::Value(Value::String(String::from("+161")))])
     );
     assert_eq!(
         recipe
@@ -479,7 +512,9 @@ animate
             .statements()
             .get(3)
             .unwrap(),
-        &Statement::Remember(Value::String(String::from("Hello World")))
+        &Statement::Remember(vec![Expression::Value(Value::String(String::from(
+            "Hello World"
+        )))])
     );
     assert_eq!(
         recipe
@@ -492,7 +527,10 @@ animate
             .statements()
             .get(4)
             .unwrap(),
-        &Statement::RememberNamed(String::from("Markus"), Value::Integer(-161))
+        &Statement::RememberNamed(
+            String::from("Markus"),
+            vec![Expression::Value(Value::Integer(-161))]
+        )
     );
     assert_eq!(
         recipe
@@ -505,7 +543,10 @@ animate
             .statements()
             .get(5)
             .unwrap(),
-        &Statement::RememberNamed(String::from("Dorni"), Value::Integer(1312))
+        &Statement::RememberNamed(
+            String::from("Dorni"),
+            vec![Expression::Value(Value::Integer(1312))]
+        )
     );
     assert_eq!(
         recipe
@@ -520,13 +561,17 @@ animate
             .unwrap(),
         &Statement::RememberNamed(
             String::from("Isa"),
-            Value::String(String::from("Hello World"))
+            vec![Expression::Value(Value::String(String::from(
+                "Hello World"
+            )))]
         )
     );
 }
 
 #[test]
 fn parse_statements() {
+    init();
+
     let code = "\
 Peter is a zombie
 summon
@@ -570,7 +615,7 @@ animate
             .statements()
             .get(0)
             .unwrap(),
-        &Statement::Remember(Value::Integer(-161))
+        &Statement::Remember(vec![Expression::Value(Value::Integer(-161))])
     );
     assert_eq!(
         recipe
@@ -583,7 +628,7 @@ animate
             .statements()
             .get(1)
             .unwrap(),
-        &Statement::Remember(Value::Integer(1312))
+        &Statement::Remember(vec![Expression::Value(Value::Integer(1312))])
     );
     assert_eq!(
         recipe
@@ -667,6 +712,8 @@ animate
 
 #[test]
 fn parse_active() {
+    init();
+
     let code = "\
 Peter is a zombie
 summon
@@ -761,4 +808,110 @@ bind";
     assert_eq!(recipe.creatures().get("Max").unwrap().active(), true);
     assert_eq!(recipe.creatures().get("Anna").unwrap().active(), true);
     assert_eq!(recipe.creatures().get("Beatrix").unwrap().active(), true);
+}
+
+#[test]
+fn fibonacci() {
+    init();
+
+    let code = "\
+Zombie1 is a zombie
+summon
+    remember 1
+bind
+
+Zombie2 is a zombie
+summon
+    remember 1
+bind
+
+Fibonacci is a zombie
+summon
+    remember 0
+    task SayFibonaccis
+        say moan Zombie1
+        say moan Zombie2
+        remember Zombie1 moan Zombie1 moan Zombie2
+        remember Zombie2 moan Zombie1 moan Zombie2
+        remember moan Zombie2
+    animate
+animate";
+
+    let recipe = parse(code).unwrap();
+
+    assert_eq!(recipe.creatures().len(), 3);
+
+    assert_eq!(recipe.creatures().get("Zombie1").unwrap().active(), false);
+    assert_eq!(recipe.creatures().get("Zombie1").unwrap().tasks().len(), 0);
+    assert_eq!(
+        recipe.creatures().get("Zombie1").unwrap().moan(),
+        Value::Integer(1)
+    );
+
+    assert_eq!(recipe.creatures().get("Zombie2").unwrap().active(), false);
+    assert_eq!(recipe.creatures().get("Zombie2").unwrap().tasks().len(), 0);
+    assert_eq!(
+        recipe.creatures().get("Zombie2").unwrap().moan(),
+        Value::Integer(1)
+    );
+
+    assert_eq!(recipe.creatures().get("Fibonacci").unwrap().active(), true);
+    assert_eq!(
+        recipe.creatures().get("Fibonacci").unwrap().tasks().len(),
+        1
+    );
+    assert_eq!(
+        recipe
+            .creatures()
+            .get("Fibonacci")
+            .unwrap()
+            .tasks()
+            .get("SayFibonaccis")
+            .unwrap()
+            .active(),
+        true
+    );
+
+    let statements = recipe
+        .creatures()
+        .get("Fibonacci")
+        .unwrap()
+        .tasks()
+        .get("SayFibonaccis")
+        .unwrap()
+        .statements();
+
+    assert_eq!(statements.len(), 5);
+    assert_eq!(
+        statements[0],
+        Statement::Say(vec![Expression::MoanNamed(String::from("Zombie1"))])
+    );
+    assert_eq!(
+        statements[1],
+        Statement::Say(vec![Expression::MoanNamed(String::from("Zombie2"))])
+    );
+    assert_eq!(
+        statements[2],
+        Statement::RememberNamed(
+            String::from("Zombie1"),
+            vec![
+                Expression::MoanNamed(String::from("Zombie1")),
+                Expression::MoanNamed(String::from("Zombie2"))
+            ]
+        )
+    );
+    assert_eq!(
+        statements[3],
+        Statement::RememberNamed(
+            String::from("Zombie2"),
+            vec![
+                Expression::MoanNamed(String::from("Zombie1")),
+                Expression::MoanNamed(String::from("Zombie2"))
+            ]
+        )
+    );
+    assert_eq!(
+        statements[4],
+        Statement::Remember(vec![Expression::MoanNamed(String::from("Zombie2"))])
+    );
 }

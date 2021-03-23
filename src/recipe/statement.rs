@@ -1,4 +1,4 @@
-use crate::value::Value;
+use super::expression::Expression;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
@@ -12,8 +12,8 @@ pub enum Statement {
     ForgetNamed(String),
     Invoke,
     InvokeNamed(String),
-    Remember(Value),
-    RememberNamed(String, Value),
-    Say(Value),
-    SayNamed(String, Value),
+    Remember(Vec<Expression>),
+    RememberNamed(String, Vec<Expression>),
+    Say(Vec<Expression>),
+    SayNamed(String, Vec<Expression>),
 }

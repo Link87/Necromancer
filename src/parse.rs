@@ -4,13 +4,14 @@ use log::{debug, trace};
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_till};
 use nom::character::complete::{alpha1, alphanumeric0, char, digit1, multispace0, multispace1};
-use nom::combinator::{eof, into, map, not, peek, recognize, success};
+use nom::combinator::{eof, into, map, not, peek, recognize};
 use nom::error::{Error, ErrorKind};
-use nom::multi::{many0, many1, many_till};
+use nom::multi::{many0, many1, many_till, separated_list1};
 use nom::sequence::{delimited, pair, preceded, separated_pair, terminated, tuple};
 use nom::{Err, Finish, IResult};
 
 use crate::recipe::creature::{Creature, Species};
+use crate::recipe::expression::Expression;
 use crate::recipe::statement::Statement;
 use crate::recipe::task::Task;
 use crate::recipe::Recipe;
@@ -155,73 +156,93 @@ impl<'a> Parse<'a> for Statement {
     fn parse(code: &'a str) -> IResult<&'a str, Statement> {
         trace!("Code (statement): {}", code);
         alt((
-            preceded(
-                // TOOD
-                tag("animatex"),
-                alt((
-                    map(preceded(multispace1, parse_identifier), |name| {
-                        Statement::AnimateNamed(String::from(name))
-                    }),
-                    success(Statement::Animate),
-                )),
+            map(
+                separated_pair(tag("animatex"), multispace1, parse_identifier),
+                |(_, name)| {
+                    // TODO
+                    Statement::AnimateNamed(String::from(name))
+                },
             ),
-            preceded(
-                tag("banish"),
-                alt((
-                    map(preceded(multispace1, parse_identifier), |name| {
-                        Statement::BanishNamed(String::from(name))
-                    }),
-                    success(Statement::Banish),
-                )),
+            map(tag("animatex"), |_| Statement::Animate), // TODO
+            map(
+                separated_pair(tag("banish"), multispace1, parse_identifier),
+                |(_, name)| Statement::BanishNamed(String::from(name)),
             ),
-            preceded(
-                // TOOD
-                tag("disturbx"),
-                alt((
-                    map(preceded(multispace1, parse_identifier), |name| {
-                        Statement::DisturbNamed(String::from(name))
-                    }),
-                    success(Statement::Disturb),
-                )),
+            map(tag("banish"), |_| Statement::Banish),
+            map(
+                separated_pair(tag("disturbx"), multispace1, parse_identifier),
+                |(_, name)| {
+                    // TODO
+                    Statement::DisturbNamed(String::from(name))
+                },
             ),
-            preceded(
-                tag("forget"),
-                alt((
-                    map(preceded(multispace1, parse_identifier), |name| {
-                        Statement::ForgetNamed(String::from(name))
-                    }),
-                    success(Statement::Forget),
-                )),
+            map(tag("disturbx"), |_| Statement::Disturb), // TODO
+            map(
+                separated_pair(tag("forget"), multispace1, parse_identifier),
+                |(_, name)| Statement::ForgetNamed(String::from(name)),
             ),
-            preceded(
-                tag("invoke"),
-                alt((
-                    map(preceded(multispace1, parse_identifier), |name| {
-                        Statement::InvokeNamed(String::from(name))
-                    }),
-                    success(Statement::Invoke),
-                )),
+            map(tag("forget"), |_| Statement::Forget),
+            map(
+                separated_pair(tag("invoke"), multispace1, parse_identifier),
+                |(_, name)| Statement::InvokeNamed(String::from(name)),
             ),
-            preceded(
-                pair(tag("remember"), multispace1),
-                alt((
-                    map(Value::parse, Statement::Remember),
-                    map(
-                        separated_pair(parse_identifier, multispace1, Value::parse),
-                        |(name, value)| Statement::RememberNamed(String::from(name), value),
-                    ),
-                )),
+            map(tag("invoke"), |_| Statement::Invoke),
+            map(
+                separated_pair(tag("remember"), multispace1, Vec::<Expression>::parse),
+                |(_, exprs)| Statement::Remember(exprs),
             ),
-            preceded(
-                pair(tag("say"), multispace1),
-                alt((
-                    map(Value::parse, Statement::Say),
-                    map(
-                        separated_pair(parse_identifier, multispace1, Value::parse),
-                        |(name, value)| Statement::SayNamed(String::from(name), value),
-                    ),
+            map(
+                tuple((
+                    tag("remember"),
+                    multispace1,
+                    parse_identifier,
+                    multispace1,
+                    Vec::<Expression>::parse,
                 )),
+                |(_, _, name, _, exprs)| Statement::RememberNamed(String::from(name), exprs),
             ),
+            map(
+                separated_pair(tag("say"), multispace1, Vec::<Expression>::parse),
+                |(_, exprs)| Statement::Say(exprs),
+            ),
+            map(
+                tuple((
+                    tag("say"),
+                    multispace1,
+                    parse_identifier,
+                    multispace1,
+                    Vec::<Expression>::parse,
+                )),
+                |(_, _, name, _, exprs)| Statement::SayNamed(String::from(name), exprs),
+            ),
+        ))(code)
+    }
+}
+
+impl<'a> Parse<'a> for Vec<Expression> {
+    fn parse(code: &'a str) -> IResult<&'a str, Vec<Expression>> {
+        trace!("Code (expression vec): {}", code);
+        separated_list1(multispace1, Expression::parse)(code)
+    }
+}
+
+impl<'a> Parse<'a> for Expression {
+    fn parse(code: &'a str) -> IResult<&'a str, Expression> {
+        trace!("Code (expression): {}", code);
+        alt((
+            map(
+                separated_pair(tag("moan"), multispace1, parse_identifier),
+                |(_, name)| Expression::MoanNamed(String::from(name)),
+            ),
+            map(tag("moan"), |_| Expression::Moan),
+            map(
+                separated_pair(tag("remembering"), multispace1, parse_identifier),
+                |(_, name)| Expression::RememberingNamed(String::from(name)),
+            ),
+            map(tag("remembering"), |_| Expression::Remembering),
+            map(tag("Rend"), |_| Expression::Rend),
+            map(tag("Turn"), |_| Expression::Turn),
+            map(Value::parse, Expression::Value),
         ))(code)
     }
 }
@@ -237,6 +258,7 @@ impl<'a> Parse<'a> for Value {
 }
 
 fn parse_integer<'a>(code: &'a str) -> IResult<&'a str, i64> {
+    trace!("Code (int): {}", code);
     let (code, num) = alt((digit1, recognize(pair(char('-'), digit1))))(code)?;
 
     match str::parse::<i64>(num) {
@@ -249,10 +271,12 @@ fn parse_integer<'a>(code: &'a str) -> IResult<&'a str, i64> {
 }
 
 fn parse_string<'a>(code: &'a str) -> IResult<&'a str, &'a str> {
+    trace!("Code (string): {}", code);
     delimited(char('"'), take_till(|c| c == '\"'), char('"'))(code)
 }
 
 fn parse_identifier<'a>(code: &'a str) -> IResult<&'a str, &'a str> {
+    trace!("Code (identifier): {}", code);
     peek(not(keyword))(code)?;
     recognize(pair(alpha1, alphanumeric0))(code)
 }
