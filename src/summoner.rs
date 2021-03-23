@@ -411,6 +411,7 @@ async fn execute_statement(
                 .await
                 .expect("Could not output text!");
         }
+        _ => unimplemented!(),
     }
 }
 

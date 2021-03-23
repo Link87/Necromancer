@@ -578,8 +578,12 @@ summon
     task Test1
         remember -161
         remember 1312
+        animatex
+        animatex Peter
         banish
         banish Peter
+        disturbx
+        disturbx Peter
         forget Peter
         forget
         invoke
@@ -601,7 +605,7 @@ animate
             .unwrap()
             .statements()
             .len(),
-        8
+        12
     );
 
     assert_eq!(
@@ -641,7 +645,7 @@ animate
             .statements()
             .get(2)
             .unwrap(),
-        &Statement::Banish,
+        &Statement::Animate,
     );
     assert_eq!(
         recipe
@@ -654,7 +658,7 @@ animate
             .statements()
             .get(3)
             .unwrap(),
-        &Statement::BanishNamed(String::from("Peter")),
+        &Statement::AnimateNamed(String::from("Peter")),
     );
     assert_eq!(
         recipe
@@ -667,7 +671,7 @@ animate
             .statements()
             .get(4)
             .unwrap(),
-        &Statement::ForgetNamed(String::from("Peter")),
+        &Statement::Banish,
     );
     assert_eq!(
         recipe
@@ -680,7 +684,7 @@ animate
             .statements()
             .get(5)
             .unwrap(),
-        &Statement::Forget,
+        &Statement::BanishNamed(String::from("Peter")),
     );
     assert_eq!(
         recipe
@@ -693,7 +697,7 @@ animate
             .statements()
             .get(6)
             .unwrap(),
-        &Statement::Invoke,
+        &Statement::Disturb,
     );
     assert_eq!(
         recipe
@@ -705,6 +709,58 @@ animate
             .unwrap()
             .statements()
             .get(7)
+            .unwrap(),
+        &Statement::DisturbNamed(String::from("Peter")),
+    );
+    assert_eq!(
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(8)
+            .unwrap(),
+        &Statement::ForgetNamed(String::from("Peter")),
+    );
+    assert_eq!(
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(9)
+            .unwrap(),
+        &Statement::Forget,
+    );
+    assert_eq!(
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(10)
+            .unwrap(),
+        &Statement::Invoke,
+    );
+    assert_eq!(
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(11)
             .unwrap(),
         &Statement::InvokeNamed(String::from("Peter")),
     );
@@ -829,11 +885,13 @@ Fibonacci is a zombie
 summon
     remember 0
     task SayFibonaccis
-        say moan Zombie1
-        say moan Zombie2
-        remember Zombie1 moan Zombie1 moan Zombie2
-        remember Zombie2 moan Zombie1 moan Zombie2
-        remember moan Zombie2
+        shamble
+            say moan Zombie1
+            say moan Zombie2
+            remember Zombie1 moan Zombie1 moan Zombie2
+            remember Zombie2 moan Zombie1 moan Zombie2
+            remember moan Zombie2
+        until remembering 100
     animate
 animate";
 
@@ -881,37 +939,347 @@ animate";
         .unwrap()
         .statements();
 
-    assert_eq!(statements.len(), 5);
+    assert_eq!(statements.len(), 1);
+
+    match &statements[0] {
+        Statement::ShambleUntil(expr, statements) => {
+            assert_eq!(expr, &Expression::Remembering(Value::Integer(100)));
+
+            assert_eq!(statements.len(), 5);
+            assert_eq!(
+                statements[0],
+                Statement::Say(vec![Expression::MoanNamed(String::from("Zombie1"))])
+            );
+            assert_eq!(
+                statements[1],
+                Statement::Say(vec![Expression::MoanNamed(String::from("Zombie2"))])
+            );
+            assert_eq!(
+                statements[2],
+                Statement::RememberNamed(
+                    String::from("Zombie1"),
+                    vec![
+                        Expression::MoanNamed(String::from("Zombie1")),
+                        Expression::MoanNamed(String::from("Zombie2"))
+                    ]
+                )
+            );
+            assert_eq!(
+                statements[3],
+                Statement::RememberNamed(
+                    String::from("Zombie2"),
+                    vec![
+                        Expression::MoanNamed(String::from("Zombie1")),
+                        Expression::MoanNamed(String::from("Zombie2"))
+                    ]
+                )
+            );
+            assert_eq!(
+                statements[4],
+                Statement::Remember(vec![Expression::MoanNamed(String::from("Zombie2"))])
+            );
+        }
+        _ => assert!(false),
+    }
+}
+
+#[test]
+fn parse_control_flow() {
+    init();
+
+    let code = "\
+Peter is a zombie
+summon
+    task Test1
+        shamble
+            say 1312
+            remember moan
+        around
+        shamble around
+        remember \"foo\"
+        stumble
+        shamble
+            say 1312
+            remember moan
+        until remembering 42
+        shamble until remembering 42
+        taste moan good
+            say 1312
+            remember moan
+        bad
+            stumble
+        spit
+    animate
+animate
+";
+
+    let recipe = parse(code).unwrap();
+
+    assert_eq!(recipe.creatures().get("Peter").unwrap().tasks().len(), 1);
     assert_eq!(
-        statements[0],
-        Statement::Say(vec![Expression::MoanNamed(String::from("Zombie1"))])
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .len(),
+        7
+    );
+
+    assert_eq!(
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(0)
+            .unwrap(),
+        &Statement::ShambleAround(vec![
+            Statement::Say(vec![Expression::Value(Value::Integer(1312))]),
+            Statement::Remember(vec![Expression::Moan]),
+        ])
     );
     assert_eq!(
-        statements[1],
-        Statement::Say(vec![Expression::MoanNamed(String::from("Zombie2"))])
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(1)
+            .unwrap(),
+        &Statement::ShambleAround(vec![])
     );
     assert_eq!(
-        statements[2],
-        Statement::RememberNamed(
-            String::from("Zombie1"),
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(2)
+            .unwrap(),
+        &Statement::Remember(vec![Expression::Value(Value::String(String::from("foo")))])
+    );
+    assert_eq!(
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(3)
+            .unwrap(),
+        &Statement::Stumble,
+    );
+    assert_eq!(
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(4)
+            .unwrap(),
+        &Statement::ShambleUntil(
+            Expression::Remembering(Value::Integer(42)),
             vec![
-                Expression::MoanNamed(String::from("Zombie1")),
-                Expression::MoanNamed(String::from("Zombie2"))
+                Statement::Say(vec![Expression::Value(Value::Integer(1312))]),
+                Statement::Remember(vec![Expression::Moan]),
             ]
         )
     );
     assert_eq!(
-        statements[3],
-        Statement::RememberNamed(
-            String::from("Zombie2"),
-            vec![
-                Expression::MoanNamed(String::from("Zombie1")),
-                Expression::MoanNamed(String::from("Zombie2"))
-            ]
-        )
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(5)
+            .unwrap(),
+        &Statement::ShambleUntil(Expression::Remembering(Value::Integer(42)), vec![])
     );
     assert_eq!(
-        statements[4],
-        Statement::Remember(vec![Expression::MoanNamed(String::from("Zombie2"))])
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(6)
+            .unwrap(),
+        &Statement::Taste(
+            Expression::Moan,
+            vec![
+                Statement::Say(vec![Expression::Value(Value::Integer(1312))]),
+                Statement::Remember(vec![Expression::Moan]),
+            ],
+            vec![Statement::Stumble]
+        ),
+    );
+}
+
+#[test]
+fn parse_expressions() {
+    init();
+
+    let code = "\
+Peter is a zombie
+summon
+    task Test1
+        remember moan X moan moan Y
+        remember moan
+        remember moan moan moan
+        say remembering 69 moan
+        say moan Y remembering X 1312
+        remember rend turn moan X moan
+        remember moan \"X\"
+    animate
+animate
+";
+
+    let recipe = parse(code).unwrap();
+
+    assert_eq!(recipe.creatures().get("Peter").unwrap().tasks().len(), 1);
+    assert_eq!(
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .len(),
+        7
+    );
+
+    assert_eq!(
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(0)
+            .unwrap(),
+        &Statement::Remember(vec![
+            Expression::MoanNamed(String::from("X")),
+            Expression::Moan,
+            Expression::MoanNamed(String::from("Y"))
+        ])
+    );
+    assert_eq!(
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(1)
+            .unwrap(),
+        &Statement::Remember(vec![Expression::Moan])
+    );
+    assert_eq!(
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(2)
+            .unwrap(),
+        &Statement::Remember(vec![Expression::Moan, Expression::Moan, Expression::Moan]),
+    );
+    assert_eq!(
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(3)
+            .unwrap(),
+        &Statement::Say(vec![
+            Expression::Remembering(Value::Integer(69)),
+            Expression::Moan
+        ]),
+    );
+    assert_eq!(
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(4)
+            .unwrap(),
+        &Statement::Say(vec![
+            Expression::MoanNamed(String::from("Y")),
+            Expression::RememberingNamed(String::from("X"), Value::Integer(1312))
+        ]),
+    );
+    assert_eq!(
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(5)
+            .unwrap(),
+        &Statement::Remember(vec![
+            Expression::Rend,
+            Expression::Turn,
+            Expression::MoanNamed(String::from("X")),
+            Expression::Moan
+        ]),
+    );
+    assert_eq!(
+        recipe
+            .creatures()
+            .get("Peter")
+            .unwrap()
+            .tasks()
+            .get("Test1")
+            .unwrap()
+            .statements()
+            .get(6)
+            .unwrap(),
+        &Statement::Remember(vec![
+            Expression::Moan,
+            Expression::Value(Value::String(String::from("X")))
+        ]),
     );
 }

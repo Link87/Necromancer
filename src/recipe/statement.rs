@@ -16,4 +16,10 @@ pub enum Statement {
     RememberNamed(String, Vec<Expression>),
     Say(Vec<Expression>),
     SayNamed(String, Vec<Expression>),
+
+    // Control flow
+    ShambleUntil(Expression, Vec<Statement>),
+    ShambleAround(Vec<Statement>),
+    Stumble,
+    Taste(Expression, Vec<Statement>, Vec<Statement>),
 }

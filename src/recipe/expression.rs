@@ -4,8 +4,8 @@ use crate::value::Value;
 pub enum Expression {
     Moan,
     MoanNamed(String),
-    Remembering,
-    RememberingNamed(String),
+    Remembering(Value),
+    RememberingNamed(String, Value),
     Rend,
     Turn,
     Value(Value),

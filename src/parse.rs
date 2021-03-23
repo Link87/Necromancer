@@ -1,14 +1,14 @@
 use either::Either;
 use indexmap::IndexSet;
 use log::{debug, trace};
-use nom::branch::alt;
 use nom::bytes::complete::{tag, take_till};
 use nom::character::complete::{alpha1, alphanumeric0, char, digit1, multispace0, multispace1};
-use nom::combinator::{eof, into, map, not, peek, recognize};
-use nom::error::{Error, ErrorKind};
+use nom::combinator::{all_consuming, eof, into, map, map_parser, map_res, not, peek, recognize};
+use nom::error::Error;
 use nom::multi::{many0, many1, many_till, separated_list1};
 use nom::sequence::{delimited, pair, preceded, separated_pair, terminated, tuple};
-use nom::{Err, Finish, IResult};
+use nom::{branch::alt, bytes::complete::take_until};
+use nom::{Finish, IResult};
 
 use crate::recipe::creature::{Creature, Species};
 use crate::recipe::expression::Expression;
@@ -215,6 +215,50 @@ impl<'a> Parse<'a> for Statement {
                 )),
                 |(_, _, name, _, exprs)| Statement::SayNamed(String::from(name), exprs),
             ),
+            map(
+                delimited(
+                    pair(tag("shamble"), multispace1),
+                    map_parser(
+                        take_until("around"),
+                        all_consuming(many0(terminated(Statement::parse, multispace1))),
+                    ),
+                    tag("around"),
+                ),
+                Statement::ShambleAround,
+            ),
+            map(
+                tuple((
+                    pair(tag("shamble"), multispace1),
+                    map_parser(
+                        take_until("until"),
+                        all_consuming(many0(terminated(Statement::parse, multispace1))),
+                    ),
+                    preceded(pair(tag("until"), multispace1), Expression::parse),
+                )),
+                |(_, statements, expr)| Statement::ShambleUntil(expr, statements),
+            ),
+            map(tag("stumble"), |_| Statement::Stumble),
+            map(
+                tuple((
+                    preceded(pair(tag("taste"), multispace1), Expression::parse),
+                    preceded(
+                        tuple((multispace1, tag("good"), multispace1)),
+                        map_parser(
+                            take_until("bad"),
+                            all_consuming(many0(terminated(Statement::parse, multispace1))),
+                        ),
+                    ),
+                    delimited(
+                        pair(tag("bad"), multispace1),
+                        map_parser(
+                            take_until("spit"),
+                            all_consuming(many0(terminated(Statement::parse, multispace1))),
+                        ),
+                        tag("spit"),
+                    ),
+                )),
+                |(condition, good, bad)| Statement::Taste(condition, good, bad),
+            ),
         ))(code)
     }
 }
@@ -236,12 +280,21 @@ impl<'a> Parse<'a> for Expression {
             ),
             map(tag("moan"), |_| Expression::Moan),
             map(
-                separated_pair(tag("remembering"), multispace1, parse_identifier),
-                |(_, name)| Expression::RememberingNamed(String::from(name)),
+                tuple((
+                    tag("remembering"),
+                    multispace1,
+                    parse_identifier,
+                    multispace1,
+                    Value::parse,
+                )),
+                |(_, _, name, _, value)| Expression::RememberingNamed(String::from(name), value),
             ),
-            map(tag("remembering"), |_| Expression::Remembering),
-            map(tag("Rend"), |_| Expression::Rend),
-            map(tag("Turn"), |_| Expression::Turn),
+            map(
+                separated_pair(tag("remembering"), multispace1, Value::parse),
+                |(_, value)| Expression::Remembering(value),
+            ),
+            map(tag("rend"), |_| Expression::Rend),
+            map(tag("turn"), |_| Expression::Turn),
             map(Value::parse, Expression::Value),
         ))(code)
     }
@@ -259,15 +312,10 @@ impl<'a> Parse<'a> for Value {
 
 fn parse_integer<'a>(code: &'a str) -> IResult<&'a str, i64> {
     trace!("Code (int): {}", code);
-    let (code, num) = alt((digit1, recognize(pair(char('-'), digit1))))(code)?;
-
-    match str::parse::<i64>(num) {
-        Ok(num) => Ok((code, num)),
-        Err(_) => Err(Err::Error(Error {
-            input: code,
-            code: ErrorKind::Digit,
-        })),
-    }
+    map_res(
+        alt((digit1, recognize(pair(char('-'), digit1)))),
+        str::parse::<i64>,
+    )(code)
 }
 
 fn parse_string<'a>(code: &'a str) -> IResult<&'a str, &'a str> {
