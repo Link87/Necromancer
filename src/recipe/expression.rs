@@ -1,11 +1,11 @@
 use crate::value::Value;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Expression {
+pub enum Expression<'a> {
     Moan,
-    MoanNamed(String),
+    MoanNamed(&'a str),
     Remembering(Value),
-    RememberingNamed(String, Value),
+    RememberingNamed(&'a str, Value),
     Rend,
     Turn,
     Value(Value),

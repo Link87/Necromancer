@@ -387,7 +387,7 @@ animate
             .get(4)
             .unwrap(),
         &Statement::SayNamed(
-            String::from("Markus"),
+            "Markus",
             vec![Expression::Value(Value::Integer(-161))]
         )
     );
@@ -403,7 +403,7 @@ animate
             .get(5)
             .unwrap(),
         &Statement::SayNamed(
-            String::from("Dorni"),
+            "Dorni",
             vec![Expression::Value(Value::Integer(1312))]
         )
     );
@@ -419,7 +419,7 @@ animate
             .get(6)
             .unwrap(),
         &Statement::SayNamed(
-            String::from("Isa"),
+            "Isa",
             vec![Expression::Value(Value::String(String::from(
                 "Hello World"
             )))]
@@ -528,7 +528,7 @@ animate
             .get(4)
             .unwrap(),
         &Statement::RememberNamed(
-            String::from("Markus"),
+            "Markus",
             vec![Expression::Value(Value::Integer(-161))]
         )
     );
@@ -544,7 +544,7 @@ animate
             .get(5)
             .unwrap(),
         &Statement::RememberNamed(
-            String::from("Dorni"),
+            "Dorni",
             vec![Expression::Value(Value::Integer(1312))]
         )
     );
@@ -560,7 +560,7 @@ animate
             .get(6)
             .unwrap(),
         &Statement::RememberNamed(
-            String::from("Isa"),
+            "Isa",
             vec![Expression::Value(Value::String(String::from(
                 "Hello World"
             )))]
@@ -658,7 +658,7 @@ animate
             .statements()
             .get(3)
             .unwrap(),
-        &Statement::AnimateNamed(String::from("Peter")),
+        &Statement::AnimateNamed("Peter"),
     );
     assert_eq!(
         recipe
@@ -684,7 +684,7 @@ animate
             .statements()
             .get(5)
             .unwrap(),
-        &Statement::BanishNamed(String::from("Peter")),
+        &Statement::BanishNamed("Peter"),
     );
     assert_eq!(
         recipe
@@ -710,7 +710,7 @@ animate
             .statements()
             .get(7)
             .unwrap(),
-        &Statement::DisturbNamed(String::from("Peter")),
+        &Statement::DisturbNamed("Peter"),
     );
     assert_eq!(
         recipe
@@ -723,7 +723,7 @@ animate
             .statements()
             .get(8)
             .unwrap(),
-        &Statement::ForgetNamed(String::from("Peter")),
+        &Statement::ForgetNamed("Peter"),
     );
     assert_eq!(
         recipe
@@ -762,7 +762,7 @@ animate
             .statements()
             .get(11)
             .unwrap(),
-        &Statement::InvokeNamed(String::from("Peter")),
+        &Statement::InvokeNamed("Peter"),
     );
 }
 
@@ -948,35 +948,35 @@ animate";
             assert_eq!(statements.len(), 5);
             assert_eq!(
                 statements[0],
-                Statement::Say(vec![Expression::MoanNamed(String::from("Zombie1"))])
+                Statement::Say(vec![Expression::MoanNamed("Zombie1")])
             );
             assert_eq!(
                 statements[1],
-                Statement::Say(vec![Expression::MoanNamed(String::from("Zombie2"))])
+                Statement::Say(vec![Expression::MoanNamed("Zombie2")])
             );
             assert_eq!(
                 statements[2],
                 Statement::RememberNamed(
-                    String::from("Zombie1"),
+                    "Zombie1",
                     vec![
-                        Expression::MoanNamed(String::from("Zombie1")),
-                        Expression::MoanNamed(String::from("Zombie2"))
+                        Expression::MoanNamed("Zombie1"),
+                        Expression::MoanNamed("Zombie2")
                     ]
                 )
             );
             assert_eq!(
                 statements[3],
                 Statement::RememberNamed(
-                    String::from("Zombie2"),
+                    "Zombie2",
                     vec![
-                        Expression::MoanNamed(String::from("Zombie1")),
-                        Expression::MoanNamed(String::from("Zombie2"))
+                        Expression::MoanNamed("Zombie1"),
+                        Expression::MoanNamed("Zombie2")
                     ]
                 )
             );
             assert_eq!(
                 statements[4],
-                Statement::Remember(vec![Expression::MoanNamed(String::from("Zombie2"))])
+                Statement::Remember(vec![Expression::MoanNamed("Zombie2")])
             );
         }
         _ => assert!(false),
@@ -1185,9 +1185,9 @@ animate
             .get(0)
             .unwrap(),
         &Statement::Remember(vec![
-            Expression::MoanNamed(String::from("X")),
+            Expression::MoanNamed("X"),
             Expression::Moan,
-            Expression::MoanNamed(String::from("Y"))
+            Expression::MoanNamed("Y")
         ])
     );
     assert_eq!(
@@ -1244,8 +1244,8 @@ animate
             .get(4)
             .unwrap(),
         &Statement::Say(vec![
-            Expression::MoanNamed(String::from("Y")),
-            Expression::RememberingNamed(String::from("X"), Value::Integer(1312))
+            Expression::MoanNamed("Y"),
+            Expression::RememberingNamed("X", Value::Integer(1312))
         ]),
     );
     assert_eq!(
@@ -1262,7 +1262,7 @@ animate
         &Statement::Remember(vec![
             Expression::Rend,
             Expression::Turn,
-            Expression::MoanNamed(String::from("X")),
+            Expression::MoanNamed("X"),
             Expression::Moan
         ]),
     );

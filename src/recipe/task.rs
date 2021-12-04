@@ -4,14 +4,14 @@ use std::hash::{Hash, Hasher};
 use super::statement::Statement;
 
 #[derive(Debug, Clone)]
-pub struct Task {
-    name: String,
+pub struct Task<'a> {
+    name: &'a str,
     active: bool,
-    statements: Vec<Statement>,
+    statements: Vec<Statement<'a>>,
 }
 
-impl Task {
-    pub fn new(name: String, active: bool, statements: Vec<Statement>) -> Task {
+impl<'a> Task<'a> {
+    pub fn new(name: &'a str, active: bool, statements: Vec<Statement<'a>>) -> Task<'a> {
         Task {
             name,
             active,
@@ -19,7 +19,7 @@ impl Task {
         }
     }
 
-    pub fn name<'a>(&'a self) -> &'a str {
+    pub fn name(&self) -> &'a str {
         &self.name
     }
 
@@ -27,28 +27,28 @@ impl Task {
         self.active
     }
 
-    pub fn statements<'a>(&self) -> &Vec<Statement> {
+    pub fn statements(&self) -> &Vec<Statement> {
         &self.statements
     }
 }
 
 /// Two tasks are considered equal, if and only if their names are equal.
-impl PartialEq<Task> for Task {
+impl PartialEq<Task<'_>> for Task<'_> {
     fn eq(&self, other: &Task) -> bool {
         self.name == other.name
     }
 }
 
-impl Eq for Task {}
+impl Eq for Task<'_> {}
 
-impl Hash for Task {
+impl Hash for Task<'_> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.name.hash(state);
     }
 }
 
-impl Borrow<str> for Task {
-    fn borrow(&self) -> &str {
-        return self.name.borrow();
+impl<'a> Borrow<str> for Task<'a> {
+    fn borrow(&self) -> &'a str {
+        return self.name;
     }
 }

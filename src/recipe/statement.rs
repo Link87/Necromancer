@@ -1,25 +1,25 @@
 use super::expression::Expression;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Statement {
+pub enum Statement<'a> {
     Animate,
-    AnimateNamed(String),
+    AnimateNamed(&'a str),
     Banish,
-    BanishNamed(String),
+    BanishNamed(&'a str),
     Disturb,
-    DisturbNamed(String),
+    DisturbNamed(&'a str),
     Forget,
-    ForgetNamed(String),
+    ForgetNamed(&'a str),
     Invoke,
-    InvokeNamed(String),
-    Remember(Vec<Expression>),
-    RememberNamed(String, Vec<Expression>),
-    Say(Vec<Expression>),
-    SayNamed(String, Vec<Expression>),
+    InvokeNamed(&'a str),
+    Remember(Vec<Expression<'a>>),
+    RememberNamed(&'a str, Vec<Expression<'a>>),
+    Say(Vec<Expression<'a>>),
+    SayNamed(&'a str, Vec<Expression<'a>>),
 
     // Control flow
-    ShambleUntil(Expression, Vec<Statement>),
-    ShambleAround(Vec<Statement>),
+    ShambleUntil(Expression<'a>, Vec<Statement<'a>>),
+    ShambleAround(Vec<Statement<'a>>),
     Stumble,
-    Taste(Expression, Vec<Statement>, Vec<Statement>),
+    Taste(Expression<'a>, Vec<Statement<'a>>, Vec<Statement<'a>>),
 }

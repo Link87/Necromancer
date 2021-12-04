@@ -5,37 +5,55 @@ use log::debug;
 
 pub mod parse;
 pub mod recipe;
-pub mod summoner;
+// pub mod summon;
 pub mod value;
 
-use summoner::Scheduler;
+// use summon::Scheduler;
 
 pub struct Config {
-    pub filename: String,
+    path: String,
+    output: OutputMode,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum OutputMode {
+    Run,
+    SyntaxTree,
 }
 
 impl Config {
-    pub fn new(args: &[String]) -> Result<Config, &'static str> {
-        if args.len() < 2 {
-            return Err("Please provide a file name.");
-        }
-
-        let filename = args[1].clone();
-
-        Ok(Config { filename })
+    pub fn new(path: String) -> Config {
+        Config { path, output: OutputMode::Run }
     }
+
+    pub fn path(&self) -> &str {
+        &self.path[..]
+    }
+
+    pub fn output_mode(&self) -> OutputMode {
+        self.output
+    }
+
+    pub fn set_output_mode(&mut self, mode: OutputMode) {
+        self.output = mode;
+    }
+
 }
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    let code = fs::read_to_string(config.filename)?;
+    let code = fs::read_to_string(config.path())?;
 
-    match parse::parse(&code) {
-        Ok(syntax_tree) => {
-            debug!("{:?}", &syntax_tree);
-            Scheduler::new(syntax_tree).schedule();
+    match (config.output_mode(), parse::parse(&code)) {
+        (OutputMode::SyntaxTree, Ok(syntax_tree)) => {
+            print!("{:#?}", &syntax_tree);
             Ok(())
         }
-        Err(error) => Err(Box::new(nom::error::Error::new(
+        (OutputMode::Run, Ok(syntax_tree)) => {
+            debug!("{:?}", &syntax_tree);
+            // Scheduler::new(syntax_tree).schedule();
+            Ok(())
+        }
+        (_, Err(error)) => Err(Box::new(nom::error::Error::new(
             String::from(error.input),
             error.code,
         ))),

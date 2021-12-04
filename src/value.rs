@@ -1,4 +1,5 @@
 use std::fmt::{Display, Formatter, Result};
+use std::iter::repeat_with;
 use std::ops::{Add, Div, Neg};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -7,6 +8,12 @@ pub enum Value {
     String(String),
     Boolean(bool),
     Void,
+}
+
+impl Value {
+    fn random() -> Value {
+        Value::String(repeat_with(fastrand::alphanumeric).take(7).collect())
+    }
 }
 
 impl PartialEq<&Value> for Value {
@@ -28,9 +35,13 @@ impl<'a> Add<&'a Value> for Value {
         match (self, other) {
             (Value::Integer(i1), Value::Integer(i2)) => Value::Integer(i1 + i2),
             (Value::String(s1), Value::String(s2)) => Value::String(s1 + s2),
+            (Value::String(s), Value::Integer(i)) => Value::String(format!("{}{}", s, i)),
+            (Value::String(s), Value::Boolean(b)) => Value::String(format!("{}{}", s, b)),
+            (Value::Integer(i), Value::String(s)) => Value::String(format!("{}{}", i, s)),
+            (Value::Boolean(b), Value::String(s)) => Value::String(format!("{}{}", b, s)),
             (Value::Void, v) => Value::from(v),
             (v, Value::Void) => Value::from(v),
-            _ => unimplemented!(),
+            _ => Value::random(),
         }
     }
 }
@@ -43,7 +54,7 @@ impl<'a, 'b> Div<&'b Value> for &'a Value {
             (Value::Integer(i1), Value::Integer(i2)) => Value::Integer(i1 / i2),
             (Value::Void, v) => Value::from(v),
             (v, Value::Void) => Value::from(v),
-            _ => unimplemented!(),
+            _ => Value::random(),
         }
     }
 }
@@ -55,7 +66,7 @@ impl<'a> Neg for &'a Value {
         match self {
             Value::Integer(i) => Value::Integer(-i),
             Value::Void => Value::Void,
-            _ => unimplemented!(),
+            _ => Value::random(),
         }
     }
 }
