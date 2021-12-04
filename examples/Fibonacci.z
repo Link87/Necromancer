@@ -17,7 +17,7 @@ summon
 			say moan Zombie2
 			remember Zombie1 moan Zombie1 moan Zombie2
 			remember Zombie2 moan Zombie1 moan Zombie2
-			remember moan 2
+			remember moan Zombie2
 		until remembering 100
 	animate
 animate
