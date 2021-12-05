@@ -74,12 +74,27 @@ impl Borrow<str> for Creature<'_> {
     }
 }
 
+/// The different kinds of species that a [`Creature`] can belong to.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Species {
+    /// Zombies process their active tasks in sequence, beginning from the first task defined,
+    /// as quickly as they can. They perform each task exactly once.
     Zombie,
+    /// Ghosts process their active tasks in sequence, beginning from the first task defined,
+    /// but they may wait for an undefined time before beginning and between each task.
+    /// They eventually perform each task exactly once.
     Ghost,
+    /// Vampires process their active tasks in random order, as quickly as they can.
+    /// They perform each task exactly once, and complete one task before beginning the next.
     Vampire,
+    /// Demons process their active tasks in random order, as quickly as they can.
+    /// They may decide to perform tasks multiple times before becoming inactive, but will perform
+    /// each task at least once. They may perform multiple tasks at the same time.
+    /// They may also summon additional demons exactly like themselves.
     Demon,
+    /// Djinn process their active tasks in random order, as quickly as they can. They may decide
+    /// to perform each task multiple times, or not at all, before becoming inactive.
+    /// They may perform multiple tasks at the same time.
     Djinn,
 }
 

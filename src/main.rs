@@ -52,7 +52,7 @@ fn main() {
         0 => builder.filter_level(LevelFilter::Error),
         1 => builder.filter_level(LevelFilter::Info),
         2 => builder.filter_level(LevelFilter::Debug),
-        _ => panic!("Invalid log level!")
+        _ => panic!("Invalid log level!"),
     };
     builder.init();
 

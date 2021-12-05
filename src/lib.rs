@@ -1,10 +1,12 @@
+// #![warn(missing_docs)]
+#![doc = include_str!("../README.md")]
 use std::error::Error;
 use std::fs;
 
 use log::debug;
 
 pub mod parse;
-pub mod recipe;
+pub mod scroll;
 // pub mod summon;
 pub mod value;
 
@@ -23,7 +25,10 @@ pub enum OutputMode {
 
 impl Config {
     pub fn new(path: String) -> Config {
-        Config { path, output: OutputMode::Run }
+        Config {
+            path,
+            output: OutputMode::Run,
+        }
     }
 
     pub fn path(&self) -> &str {
@@ -37,7 +42,6 @@ impl Config {
     pub fn set_output_mode(&mut self, mode: OutputMode) {
         self.output = mode;
     }
-
 }
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
@@ -50,7 +54,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         }
         (OutputMode::Run, Ok(syntax_tree)) => {
             debug!("{:?}", &syntax_tree);
-            // Scheduler::new(syntax_tree).schedule();
+            //Scheduler::new(syntax_tree).schedule();
             Ok(())
         }
         (_, Err(error)) => Err(Box::new(nom::error::Error::new(

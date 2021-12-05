@@ -1,21 +1,21 @@
 use std::borrow::Borrow;
 use std::hash::{Hash, Hasher};
 
-use super::statement::Statement;
+use super::statement::Stmt;
 
 #[derive(Debug, Clone)]
 pub struct Task<'a> {
     name: &'a str,
     active: bool,
-    statements: Vec<Statement<'a>>,
+    stmts: Vec<Stmt<'a>>,
 }
 
 impl<'a> Task<'a> {
-    pub fn new(name: &'a str, active: bool, statements: Vec<Statement<'a>>) -> Task<'a> {
+    pub fn new(name: &'a str, active: bool, stmts: Vec<Stmt<'a>>) -> Task<'a> {
         Task {
             name,
             active,
-            statements,
+            stmts,
         }
     }
 
@@ -27,8 +27,8 @@ impl<'a> Task<'a> {
         self.active
     }
 
-    pub fn statements(&self) -> &Vec<Statement> {
-        &self.statements
+    pub fn statements(&self) -> &Vec<Stmt> {
+        &self.stmts
     }
 }
 

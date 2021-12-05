@@ -10,11 +10,11 @@ use nom::sequence::{delimited, pair, preceded, separated_pair, terminated, tuple
 use nom::{branch::alt, bytes::complete::take_until};
 use nom::{Finish, IResult};
 
-use crate::recipe::creature::{Creature, Species};
-use crate::recipe::expression::Expression;
-use crate::recipe::statement::Statement;
-use crate::recipe::task::Task;
-use crate::recipe::Recipe;
+use crate::scroll::creature::{Creature, Species};
+use crate::scroll::expression::Expr;
+use crate::scroll::statement::Stmt;
+use crate::scroll::task::Task;
+use crate::scroll::Scroll;
 use crate::value::Value;
 
 #[cfg(test)]
@@ -26,8 +26,8 @@ trait Parse<'a> {
         Self: Sized;
 }
 
-impl<'a> Parse<'a> for Recipe<'a> {
-    fn parse(code: &'a str) -> IResult<&'a str, Recipe> {
+impl<'a> Parse<'a> for Scroll<'a> {
+    fn parse(code: &'a str) -> IResult<&'a str, Scroll> {
         trace!("Code (syntax tree): {}", code);
         multispace0(code)?;
         into(many1(terminated(Creature::parse, alt((eof, multispace1)))))(code)
@@ -93,10 +93,7 @@ impl<'a> Parse<'a> for Creature<'a> {
             spell
         );
 
-        Ok((
-            code,
-            Creature::summon(name, species, active, memory, tasks),
-        ))
+        Ok((code, Creature::summon(name, species, active, memory, tasks)))
     }
 }
 
@@ -141,7 +138,7 @@ impl<'a> Parse<'a> for Task<'a> {
         map(
             tuple((
                 preceded(pair(tag("task"), multispace1), parse_identifier),
-                many0(preceded(multispace1, Statement::parse)),
+                many0(preceded(multispace1, Stmt::parse)),
                 preceded(
                     multispace1,
                     alt((map(tag("animate"), |_| true), map(tag("bind"), |_| false))),
@@ -152,44 +149,44 @@ impl<'a> Parse<'a> for Task<'a> {
     }
 }
 
-impl<'a> Parse<'a> for Statement<'a> {
-    fn parse(code: &'a str) -> IResult<&'a str, Statement> {
+impl<'a> Parse<'a> for Stmt<'a> {
+    fn parse(code: &'a str) -> IResult<&'a str, Stmt> {
         trace!("Code (statement): {}", code);
         alt((
             map(
                 separated_pair(tag("animatex"), multispace1, parse_identifier),
                 |(_, name)| {
                     // TODO
-                    Statement::AnimateNamed(name)
+                    Stmt::Animate(Some(name))
                 },
             ),
-            map(tag("animatex"), |_| Statement::Animate), // TODO
+            map(tag("animatex"), |_| Stmt::Animate(None)), // TODO
             map(
                 separated_pair(tag("banish"), multispace1, parse_identifier),
-                |(_, name)| Statement::BanishNamed(name),
+                |(_, name)| Stmt::Banish(Some(name)),
             ),
-            map(tag("banish"), |_| Statement::Banish),
+            map(tag("banish"), |_| Stmt::Banish(None)),
             map(
                 separated_pair(tag("disturbx"), multispace1, parse_identifier),
                 |(_, name)| {
                     // TODO
-                    Statement::DisturbNamed(name)
+                    Stmt::Disturb(Some(name))
                 },
             ),
-            map(tag("disturbx"), |_| Statement::Disturb), // TODO
+            map(tag("disturbx"), |_| Stmt::Disturb(None)), // TODO
             map(
                 separated_pair(tag("forget"), multispace1, parse_identifier),
-                |(_, name)| Statement::ForgetNamed(name),
+                |(_, name)| Stmt::Forget(Some(name)),
             ),
-            map(tag("forget"), |_| Statement::Forget),
+            map(tag("forget"), |_| Stmt::Forget(None)),
             map(
                 separated_pair(tag("invoke"), multispace1, parse_identifier),
-                |(_, name)| Statement::InvokeNamed(name),
+                |(_, name)| Stmt::Invoke(Some(name)),
             ),
-            map(tag("invoke"), |_| Statement::Invoke),
+            map(tag("invoke"), |_| Stmt::Invoke(None)),
             map(
-                separated_pair(tag("remember"), multispace1, Vec::<Expression>::parse),
-                |(_, exprs)| Statement::Remember(exprs),
+                separated_pair(tag("remember"), multispace1, Vec::<Expr>::parse),
+                |(_, exprs)| Stmt::Remember(None, exprs),
             ),
             map(
                 tuple((
@@ -197,13 +194,13 @@ impl<'a> Parse<'a> for Statement<'a> {
                     multispace1,
                     parse_identifier,
                     multispace1,
-                    Vec::<Expression>::parse,
+                    Vec::<Expr>::parse,
                 )),
-                |(_, _, name, _, exprs)| Statement::RememberNamed(name, exprs),
+                |(_, _, name, _, exprs)| Stmt::Remember(Some(name), exprs),
             ),
             map(
-                separated_pair(tag("say"), multispace1, Vec::<Expression>::parse),
-                |(_, exprs)| Statement::Say(exprs),
+                separated_pair(tag("say"), multispace1, Vec::<Expr>::parse),
+                |(_, exprs)| Stmt::Say(None, exprs),
             ),
             map(
                 tuple((
@@ -211,74 +208,74 @@ impl<'a> Parse<'a> for Statement<'a> {
                     multispace1,
                     parse_identifier,
                     multispace1,
-                    Vec::<Expression>::parse,
+                    Vec::<Expr>::parse,
                 )),
-                |(_, _, name, _, exprs)| Statement::SayNamed(name, exprs),
+                |(_, _, name, _, exprs)| Stmt::Say(Some(name), exprs),
             ),
             map(
                 delimited(
                     pair(tag("shamble"), multispace1),
                     map_parser(
                         take_until("around"),
-                        all_consuming(many0(terminated(Statement::parse, multispace1))),
+                        all_consuming(many0(terminated(Stmt::parse, multispace1))),
                     ),
                     tag("around"),
                 ),
-                Statement::ShambleAround,
+                Stmt::ShambleAround,
             ),
             map(
                 tuple((
                     pair(tag("shamble"), multispace1),
                     map_parser(
                         take_until("until"),
-                        all_consuming(many0(terminated(Statement::parse, multispace1))),
+                        all_consuming(many0(terminated(Stmt::parse, multispace1))),
                     ),
-                    preceded(pair(tag("until"), multispace1), Expression::parse),
+                    preceded(pair(tag("until"), multispace1), Expr::parse),
                 )),
-                |(_, statements, expr)| Statement::ShambleUntil(expr, statements),
+                |(_, statements, expr)| Stmt::ShambleUntil(expr, statements),
             ),
-            map(tag("stumble"), |_| Statement::Stumble),
+            map(tag("stumble"), |_| Stmt::Stumble),
             map(
                 tuple((
-                    preceded(pair(tag("taste"), multispace1), Expression::parse),
+                    preceded(pair(tag("taste"), multispace1), Expr::parse),
                     preceded(
                         tuple((multispace1, tag("good"), multispace1)),
                         map_parser(
                             take_until("bad"),
-                            all_consuming(many0(terminated(Statement::parse, multispace1))),
+                            all_consuming(many0(terminated(Stmt::parse, multispace1))),
                         ),
                     ),
                     delimited(
                         pair(tag("bad"), multispace1),
                         map_parser(
                             take_until("spit"),
-                            all_consuming(many0(terminated(Statement::parse, multispace1))),
+                            all_consuming(many0(terminated(Stmt::parse, multispace1))),
                         ),
                         tag("spit"),
                     ),
                 )),
-                |(condition, good, bad)| Statement::Taste(condition, good, bad),
+                |(condition, good, bad)| Stmt::Taste(condition, good, bad),
             ),
         ))(code)
     }
 }
 
-impl<'a> Parse<'a> for Vec<Expression<'a>> {
-    fn parse(code: &'a str) -> IResult<&'a str, Vec<Expression>> {
+impl<'a> Parse<'a> for Vec<Expr<'a>> {
+    fn parse(code: &'a str) -> IResult<&'a str, Vec<Expr>> {
         trace!("Code (expression vec): {}", code);
-        separated_list1(multispace1, Expression::parse)(code)
+        separated_list1(multispace1, Expr::parse)(code)
     }
 }
 
-impl<'a> Parse<'a> for Expression<'a> {
-    fn parse(code: &'a str) -> IResult<&'a str, Expression> {
+impl<'a> Parse<'a> for Expr<'a> {
+    fn parse(code: &'a str) -> IResult<&'a str, Expr> {
         trace!("Code (expression): {}", code);
         alt((
             map(
                 separated_pair(tag("moan"), multispace1, parse_identifier),
-                |(_, name)| Expression::MoanNamed(name),
+                |(_, name)| Expr::Moan(Some(name)),
             ),
-            map(tag("moan"), |_| Expression::Moan),
+            map(tag("moan"), |_| Expr::Moan(None)),
             map(
                 tuple((
                     tag("remembering"),
@@ -287,15 +284,15 @@ impl<'a> Parse<'a> for Expression<'a> {
                     multispace1,
                     Value::parse,
                 )),
-                |(_, _, name, _, value)| Expression::RememberingNamed(name, value),
+                |(_, _, name, _, value)| Expr::Remembering(Some(name), value),
             ),
             map(
                 separated_pair(tag("remembering"), multispace1, Value::parse),
-                |(_, value)| Expression::Remembering(value),
+                |(_, value)| Expr::Remembering(None, value),
             ),
-            map(tag("rend"), |_| Expression::Rend),
-            map(tag("turn"), |_| Expression::Turn),
-            map(Value::parse, Expression::Value),
+            map(tag("rend"), |_| Expr::Rend),
+            map(tag("turn"), |_| Expr::Turn),
+            map(Value::parse, Expr::Value),
         ))(code)
     }
 }
@@ -367,8 +364,8 @@ fn keyword<'a>(code: &'a str) -> IResult<&'a str, &'a str> {
     )))(code)
 }
 
-pub fn parse<'a>(code: &'a str) -> Result<Recipe, Error<&'a str>> {
-    match Finish::finish(terminated(Recipe::parse, pair(multispace0, eof))(&code)) {
+pub fn parse<'a>(code: &'a str) -> Result<Scroll, Error<&'a str>> {
+    match Finish::finish(terminated(Scroll::parse, pair(multispace0, eof))(&code)) {
         Ok((_, tree)) => Ok(tree),
         Err(error) => Err(error),
     }
