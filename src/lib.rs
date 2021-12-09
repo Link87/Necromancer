@@ -5,9 +5,9 @@ use std::fs;
 
 use log::debug;
 
+pub mod necro;
 pub mod parse;
 pub mod scroll;
-pub mod necro;
 pub mod value;
 
 use necro::Necromancer;

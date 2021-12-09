@@ -90,7 +90,7 @@ fn skip_whitespace() {
     init();
 
     let code = "\
-
+\
    Peter is a zombie\tsummon
    \r\n\nanimate
     

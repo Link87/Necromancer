@@ -3,29 +3,21 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_recursion::async_recursion;
-use dashmap::{DashMap, DashSet};
-use fastrand::Rng;
-use futures::future::{self, AbortHandle, Abortable};
-use futures::stream::{FuturesUnordered, StreamExt};
-use log::{debug, error, warn};
-use once_cell::sync::Lazy;
+use futures::future;
+use log::{debug, error};
 use tokio::io::{self, AsyncWriteExt};
-use tokio::sync::mpsc::{self, UnboundedSender};
-use tokio::sync::{Mutex, Notify, RwLock};
-use tokio::task::JoinHandle;
+use tokio::sync::mpsc::UnboundedSender;
 use tokio::time;
 
 use crate::scroll::creature::{Creature, Species};
 use crate::scroll::expression::Expr;
 use crate::scroll::statement::Stmt;
 use crate::scroll::task::Task;
-use crate::scroll::Scroll;
 use crate::value::Value;
 
 use super::state::State;
 use super::Message;
 
-// static GHOST_RNG_DISTRIBUTION: Lazy<Uniform<u64>> = Lazy::new(|| Uniform::from(500..=10000));
 // static DEMON_RESAMPLE_COUNT_RNG_DISTRIBUTION: Lazy<Uniform<u64>> = Lazy::new(|| Uniform::from(0..=5));
 
 pub type Candle<'a> = Arc<&'a str>;
@@ -34,18 +26,37 @@ pub type Candle<'a> = Arc<&'a str>;
 pub struct Spirit<'a> {
     name: &'a str,
     creature: &'a Creature<'a>,
-    // sender: UnboundedSender<Message>,
+    sender: UnboundedSender<Message<'a>>,
+}
+
+struct RunningTask {
+    active: bool,
+}
+
+impl RunningTask {
+    fn new() -> RunningTask {
+        RunningTask { active: true }
+    }
+
+    fn active(&self) -> bool {
+        self.active
+    }
+
+    fn active_mut(&mut self) -> &mut bool {
+        &mut self.active
+    }
 }
 
 impl<'a: 'static> Spirit<'a> {
     pub fn summon(
         name: &'a str,
-        creature: &'a Creature<'a>, // sender: UnboundedSender<Message>,
+        creature: &'a Creature<'a>,
+        sender: UnboundedSender<Message<'a>>,
     ) -> Arc<Spirit<'a>> {
         Arc::new(Spirit {
             name,
             creature,
-            // sender,
+            sender,
         })
     }
 
@@ -157,13 +168,21 @@ impl<'a: 'static> Spirit<'a> {
 
     // perform a task asynchronously
     async fn perform(self: Arc<Self>, state: Arc<State>, task: &'a Task<'a>) {
-        self.exec_stmts(state, task.statements());
+        debug!("{} performing task {}", self.name, task.name());
+        let mut running_task = RunningTask::new();
+        self.exec_stmts(&state, &mut running_task, task.statements()).await;
     }
 
-    #[async_recursion]
-    async fn exec_stmts(&self, state: Arc<State>, stmts: &'a Vec<Stmt<'a>>) {
+    // #[async_recursion]
+    async fn exec_stmts(
+        &self,
+        state: &Arc<State>,
+        task: &mut RunningTask,
+        stmts: &'a Vec<Stmt<'a>>,
+    ) {
+        debug!("{} executing statements {:?}", self.name, stmts);
         for stmt in stmts {
-            // wait until active
+            // wait until entity is active
             loop {
                 if state.knowledge().get(self.name).unwrap().active() {
                     break;
@@ -174,13 +193,20 @@ impl<'a: 'static> Spirit<'a> {
             }
             // execute one statement at a time
             // let other tasks perform and check for being active again before next statement
-            self.exec_stmt(Arc::clone(&state), stmt).await;
+            self.exec_stmt(state, task, stmt).await;
+
+            // check if task is still active
+            if !task.active() {
+                // abort since a task cannot be reactivated
+                break;
+            }
+
             tokio::task::yield_now().await;
         }
     }
 
-    // TODO implement message passing for spawning
-    async fn exec_stmt(&self, state: Arc<State>, stmt: &'a Stmt<'a>) {
+    #[async_recursion]
+    async fn exec_stmt(&self, state: &Arc<State>, task: &mut RunningTask, stmt: &'a Stmt<'a>) {
         match stmt {
             Stmt::Animate(None) => {
                 debug!(
@@ -188,17 +214,11 @@ impl<'a: 'static> Spirit<'a> {
                     self.name,
                     self.creature.species(),
                 );
-                todo!();
-                // if matches!(species, Species::Zombie) {
-                //     set_active(state, self.name, true);
-                // }
+                self.send_message(Message::Animate(self.name));
             }
             Stmt::Animate(Some(other_name)) => {
                 debug!("{} tries to animate {}", self.name, other_name);
-                todo!();
-                // if matches!(species, Species::Zombie) {
-                //     set_active(state, other_name, true);
-                // }
+                self.send_message(Message::Animate(other_name));
             }
             Stmt::Banish(None) => {
                 debug!("{} banishing itself", self.name);
@@ -214,17 +234,11 @@ impl<'a: 'static> Spirit<'a> {
                     self.name,
                     self.creature.species(),
                 );
-                todo!();
-                // if matches!(species, Species::Ghost) {
-                //     set_active(state, self.name, true);
-                // }
+                self.send_message(Message::Disturb(self.name));
             }
             Stmt::Disturb(Some(other_name)) => {
                 debug!("{} tries to disturb {}", self.name, other_name);
-                todo!();
-                // if matches!(species, Species::Ghost) {
-                //     set_active(state, other_name, true);
-                // }
+                self.send_message(Message::Disturb(other_name));
             }
             Stmt::Forget(None) => {
                 debug!("{} forgets its value", self.name);
@@ -236,17 +250,11 @@ impl<'a: 'static> Spirit<'a> {
             }
             Stmt::Invoke(None) => {
                 debug!("{} invoking a new copy of itself", self.name);
-                todo!();
-                // sender
-                //     .send(Message::Invoke(String::from(self.name)))
-                //     .expect("Message receiver dropped before task could finish!");
+                self.send_message(Message::Invoke(self.name));
             }
             Stmt::Invoke(Some(other_name)) => {
                 debug!("{} invoking a new copy of {}", self.name, other_name);
-                todo!();
-                // sender
-                //     .send(Message::Invoke(String::from(other_name)))
-                //     .expect("Message receiver dropped before task could finish!");
+                self.send_message(Message::Invoke(other_name));
             }
             Stmt::Remember(None, exprs) => {
                 let value = self.eval_exprs(&state, exprs);
@@ -258,8 +266,9 @@ impl<'a: 'static> Spirit<'a> {
                 debug!("{} remembering {} (from {})", other_name, value, self.name);
                 set_value(&state, other_name, value)
             }
-            Stmt::Say(_, exprs) => {
+            Stmt::Say(name, exprs) => {
                 let value = self.eval_exprs(&state, exprs);
+                debug!("{:?} saying {}", name, value);
                 let mut stdout = io::stdout();
                 stdout
                     .write_all((format!("{}\n", value)).as_bytes())
@@ -270,30 +279,26 @@ impl<'a: 'static> Spirit<'a> {
                 let cond = self.eval_standalone_expr(&state, expr);
                 match cond {
                     Value::Boolean(true) => {
-                        self.exec_stmts(Arc::clone(&state), stmts).await;
+                        self.exec_stmts(&state, task, stmts).await;
                     }
                     Value::Boolean(false) => {}
                     value => panic!("Not a boolean: {}", value),
                 }
             },
             Stmt::ShambleAround(stmts) => loop {
-                self.exec_stmts(Arc::clone(&state), stmts).await;
+                self.exec_stmts(&state, task, stmts).await;
             },
             Stmt::Stumble => {
-                // TODO
-                // pass join handle here and call abort()?
-                // or make executed task a separate struct that has a cancel flag
-                // issue is that being `active` is only possible for creatures, not tasks
-                todo!();
+                *task.active_mut() = false;
             }
             Stmt::Taste(expr, stmts1, stmts2) => {
                 let cond = self.eval_standalone_expr(&state, expr);
                 match cond {
                     Value::Boolean(true) => {
-                        self.exec_stmts(Arc::clone(&state), stmts1).await;
+                        self.exec_stmts(&state, task, stmts1).await;
                     }
                     Value::Boolean(false) => {
-                        self.exec_stmts(Arc::clone(&state), stmts2).await;
+                        self.exec_stmts(&state, task, stmts2).await;
                     }
                     value => panic!("Not a boolean: {}", value),
                 }
@@ -321,22 +326,27 @@ impl<'a: 'static> Spirit<'a> {
         match expr {
             Expr::Moan(None) => stack.push(get_value(state, self.name)),
             Expr::Moan(Some(other_name)) => stack.push(get_value(state, other_name)),
-            Expr::Remembering(None, value)  => {
+            Expr::Remembering(None, value) => {
                 stack.push(Value::Boolean(value == get_value(state, self.name)))
             }
             Expr::Remembering(Some(other_name), value) => {
                 stack.push(Value::Boolean(value == get_value(state, other_name)))
             }
             Expr::Rend => {
-                let fst = &stack.pop().unwrap();
-                let snd = &stack.pop().unwrap();
-                stack.push(snd / fst);
+                let top = &stack.pop().unwrap();
+                *stack.last_mut().unwrap() = stack.last().unwrap() / top;
             }
             Expr::Turn => {
                 *stack.last_mut().unwrap() = -stack.last().unwrap();
             }
             Expr::Value(value) => stack.push(value.clone()),
         }
+    }
+
+    fn send_message(&self, message: Message<'a>) {
+        self.sender
+            .send(message)
+            .expect("Message receiver dropped before task could finish!");
     }
 }
 

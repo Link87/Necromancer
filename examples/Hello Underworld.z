@@ -1,0 +1,41 @@
+Peter is a ghost
+summon
+    remember 4
+    task Greet
+        say "Hello World!"
+        remember 42
+    animate
+    task Greet2
+        say "Hello World2!"
+        remember 42
+    animate
+    task Greet3
+        say "Hello World3!"
+        remember 42
+    animate
+    task Greet4
+        say "Hello World4!"
+        remember 42
+    animate
+    task Greet5
+        say "Hello World5!"
+        remember 42
+    animate
+    task Greet6
+        say "Hello World6!"
+        remember 42
+    animate
+    task Greet7
+        say "Hello World7!"
+        remember 42
+    animate
+disturb
+
+Isa is a ghost
+summon
+    remember "Isa's World"
+    task Greet
+        remember Peter 161
+        say "Hello Peter!"
+    animate
+disturb

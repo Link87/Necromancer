@@ -1,27 +1,21 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-    time::Duration,
-};
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Duration;
 
-use crate::{
-    necro::summon::{Candle, Spirit},
-    run,
-    scroll::{creature::Creature, Scroll},
-};
+use crate::necro::summon::{Candle, Spirit};
+use crate::scroll::creature::{Creature, Species};
+use crate::scroll::Scroll;
+
 use dashmap::DashSet;
-use futures::{future::join, StreamExt};
-use futures::{
-    future::{AbortHandle, Abortable},
-    stream::FuturesUnordered,
-};
+use futures::future::{AbortHandle, Abortable};
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 use log::{debug, warn};
 use state::State;
-use tokio::{
-    sync::{mpsc, Mutex, RwLock},
-    task::JoinHandle,
-    time,
-};
+use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
+use tokio::sync::{Mutex, RwLock};
+use tokio::task::JoinHandle;
+use tokio::time;
 
 mod state;
 mod summon;
@@ -50,7 +44,6 @@ impl Necromancer<'static> {
         let creatures = scroll.creatures();
         let ritual = Ritual::new(creatures).await;
 
-        
         // Abort futures (i.e. kill program) if every entity is inactive.
         // poll `Ritual::watchdog()` every second.
         let ritual_wd = Arc::clone(&ritual);
@@ -62,79 +55,78 @@ impl Necromancer<'static> {
                 Ritual::watchdog(Arc::clone(&ritual_wd)).await;
             }
         });
-        
-        
-        // TODO
-        // let (tx, mut rx) = mpsc::unbounded_channel();
+
         // wait for messages to arrive
         // runs indefinetly as it holds both sender and receiver refs
-        // let tasks_message_handler = Arc::clone(&tasks);
-        // let abort_handles_message_handler = Arc::clone(&abort_handles);
-        // let candles_message_handler = Arc::clone(&candles);
-        // let message_handler = tokio::spawn(async move {
-        //     while let Some(message) = rx.recv().await {
-        //         match message {
-        //             Message::Invoke(ref name) => {
-        //                 // spawn new entity and add to awaited futures
-        //                 let awakened = Incarnation::materialise(
-        //                     String::from(name),
-        //                     Arc::clone(&self.recipe),
-        //                     Arc::clone(&env),
-        //                     UnboundedSender::clone(&tx),
-        //                 );
-        //                 let candle: Arc<String> =
-        //                     Arc::clone(&candles_message_handler.get(name).unwrap());
+        let ritual_msg = Arc::clone(&ritual);
+        let message_handler = tokio::spawn(async move {
+            while let Some(message) = Ritual::received(Arc::clone(&ritual_msg)).await {
+                match message {
+                    Message::Animate(name) => {
+                        let creature = creatures.get(name).unwrap();
+                        if matches!(creature.species(), Species::Zombie) {
+                            Arc::clone(&ritual_msg).summon(creature).await;
+                        }
+                    }
+                    Message::Disturb(name) => {
+                        let creature = creatures.get(name).unwrap();
+                        if matches!(creature.species(), Species::Ghost) {
+                            Arc::clone(&ritual_msg).summon(creature).await;
+                        }
+                    }
+                    Message::Invoke(name) => {
+                        let creature = creatures.get(name).unwrap();
+                        Arc::clone(&ritual_msg).summon(creature).await;
+                    }
+                }
+            }
+        });
 
-        //                 let (handle, registration) = AbortHandle::new_pair();
-        //                 abort_handles_message_handler.write().await.push(handle);
-
-        //                 tasks_message_handler.lock().await.push(Abortable::new(
-        //                     tokio::spawn(awakened.unleash(candle)),
-        //                     registration,
-        //                 ));
-        //             }
-        //         }
-        //     }
-        // });
-
-        Ritual::end(ritual).await;
+        Ritual::finished(ritual).await;
 
         // watchdog useless now
         watchdog.abort();
 
         // Messages are no longer needed.
         // Necessary since message does not exit on its own.
-        // message_handler.abort();
+        message_handler.abort();
     }
 }
 
-struct Ritual<'a> {
+pub struct Ritual<'a> {
     /// The global state. Reference shared with the [`Spirit`]s.
     state: Arc<State>,
     /// Collection of `Future`s that are associated with an entity.
     /// A future completes when the corresponding entity is finished,
     /// i.e. the Tokio task finishes.
     /// [`Abortable`] provides a way to abort the computation.
-    tasks: FuturesUnordered<Abortable<JoinHandle<()>>>,
+    tasks: RwLock<FuturesUnordered<Abortable<JoinHandle<()>>>>,
     /// [`AbortHandles`] for aborting the computations.
-    abort_handles: Vec<AbortHandle>,
+    abort_handles: RwLock<Vec<AbortHandle>>,
     /// A candle is lit for every copy of an entity. This is used to count
     /// how many copies of an entity are alive.
     /// The `Ritual` is finished if all candles go out and the program can be killed.
-    candles: HashSet<Candle<'a>>,
+    candles: DashSet<Candle<'a>>,
+    /// Sender of an unbounded channel. To be distibuted to the entities.
+    sender: UnboundedSender<Message<'a>>,
+    /// Receiver of an unbounded channel. To be kept to receive messages from entities.
+    receiver: Mutex<UnboundedReceiver<Message<'a>>>,
 }
 
 impl<'a: 'static> Ritual<'a> {
     /// Prepare the ritual and summon any of the listed creatures.
-    async fn new(creatures: &'a HashMap<&'a str, Creature<'a>>) -> Arc<RwLock<Ritual<'a>>> {
-        let ritual = Arc::new(RwLock::new(Ritual {
+    async fn new(creatures: &'a HashMap<&'a str, Creature<'a>>) -> Arc<Ritual<'a>> {
+        let (tx, rx) = mpsc::unbounded_channel();
+        let ritual = Arc::new(Ritual {
             state: Arc::new(State::from(creatures.values())),
-            tasks: FuturesUnordered::new(),
-            abort_handles: Vec::new(),
-            candles: HashSet::new(),
-        }));
+            tasks: RwLock::new(FuturesUnordered::new()),
+            abort_handles: RwLock::new(Vec::new()),
+            candles: DashSet::new(),
+            sender: tx,
+            receiver: Mutex::new(rx),
+        });
 
-        debug!("{:?}", ritual.read().await.state);
+        debug!("{:?}", ritual.state);
 
         for creature in creatures.values() {
             Self::summon(Arc::clone(&ritual), creature).await;
@@ -144,50 +136,52 @@ impl<'a: 'static> Ritual<'a> {
     }
 
     /// Summon a creature in the [`Ritual`].
-    async fn summon(ritual: Arc<RwLock<Ritual<'a>>>, creature: &'a Creature<'a>) {
-        let mut ritual = ritual.write().await;
+    async fn summon(self: Arc<Self>, creature: &'a Creature<'a>) {
         let spirit = Spirit::summon(
             creature.name(),
             creature,
-            // UnboundedSender::clone(&tx),
+            UnboundedSender::clone(&self.sender),
         );
         // light a candle
         let candle = Arc::new(creature.name());
-        ritual.candles.insert(Arc::clone(&candle));
+        self.candles.insert(Arc::clone(&candle));
 
         // handle for killing the entity
         let (abort_handle, abort_reg) = AbortHandle::new_pair();
-        ritual.abort_handles.push(abort_handle);
+        self.abort_handles.write().await.push(abort_handle);
 
         // spawn the task and create corresponding future
-        let state = Arc::clone(&ritual.state);
+        let state = Arc::clone(&self.state);
         let join_handle = tokio::spawn(spirit.unleash(state, candle));
         let future = Abortable::new(join_handle, abort_reg);
-        ritual.tasks.push(future);
+        self.tasks.read().await.push(future); // TODO Potential dead-lock with (1)
     }
 
     /// Poll the watchdog
-    async fn watchdog(ritual: Arc<RwLock<Ritual<'a>>>) {
-        let ritual = ritual.read().await;
-        if ritual.state.knowledge().iter().all(|c| {
-            !c.value().active() || Arc::strong_count(ritual.candles.get(c.key()).unwrap()) <= 1
+    async fn watchdog(self: Arc<Self>) {
+        if self.state.knowledge().iter().all(|c| {
+            !c.value().active() || Arc::strong_count(&self.candles.get(c.key()).unwrap()) <= 1
         }) {
             warn!("Watchdog triggered! Aborting: only inactive tasks left.");
-            for handle in ritual.abort_handles.iter() {
+            for handle in self.abort_handles.read().await.iter() {
                 handle.abort()
             }
         }
     }
 
+    async fn received(self: Arc<Self>) -> Option<Message<'a>> {
+        self.receiver.lock().await.recv().await
+    }
+
     /// Use the returned `Future` to `await` the end of the ritual.
-    async fn end(ritual: Arc<RwLock<Self>>) {
+    async fn finished(self: Arc<Self>) {
         // iterate until a None appears, all tasks are finished then
-        while let Some(_) = ritual.write().await.tasks.next().await {}
+        while let Some(_) = self.tasks.write().await.next().await {} // TODO Potential dead-lock (1)
     }
 }
 
 #[derive(Debug, Clone)]
-enum Message<'a> {
+pub enum Message<'a> {
     Animate(&'a str),
     Disturb(&'a str),
     Invoke(&'a str),
