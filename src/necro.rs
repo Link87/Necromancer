@@ -5,6 +5,7 @@ use std::time::Duration;
 use crate::necro::summon::{Candle, Spirit};
 use crate::scroll::creature::{Creature, Species};
 use crate::scroll::Scroll;
+use crate::value::Value;
 
 use dashmap::DashSet;
 use futures::future::{AbortHandle, Abortable};
@@ -77,6 +78,9 @@ impl Necromancer<'static> {
                     Message::Invoke(name) => {
                         let creature = creatures.get(name).unwrap();
                         Arc::clone(&ritual_msg).summon(creature).await;
+                    }
+                    Message::Say(value) => {
+                        println!("{}", value);
                     }
                 }
             }
@@ -185,4 +189,5 @@ pub enum Message<'a> {
     Animate(&'a str),
     Disturb(&'a str),
     Invoke(&'a str),
+    Say(Value),
 }

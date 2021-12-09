@@ -1,4 +1,3 @@
-use std::env;
 use std::process;
 
 use clap::App;
@@ -20,13 +19,13 @@ fn main() {
     // let args: Vec<String> = env::args().collect();
 
     let matches = App::new("Necromancer")
-        .version(clap::crate_version!())
-        .author(clap::crate_authors!())
-        .about(clap::crate_description!())
+        // .version(clap::crate_version!())
+        // .author(clap::crate_authors!())
+        // .about(clap::crate_description!())
         .arg(
             Arg::new("path")
                 .value_name("PATH")
-                .about("Where to find the Zombie Scroll.")
+                .help("Where to find the Zombie Scroll.")
                 .index(1)
                 .value_hint(ValueHint::FilePath)
                 .required(true),
@@ -35,7 +34,7 @@ fn main() {
             Arg::new("syntax_tree_mode")
                 .short('t')
                 .long("tree")
-                .about("Stop after parsing the scroll and print syntax tree."),
+                .help("Stop after parsing the scroll and print syntax tree."),
         )
         .group(ArgGroup::new("mode").args(&["syntax_tree_mode"]))
         .arg(
@@ -43,7 +42,7 @@ fn main() {
                 .short('v')
                 .multiple_occurrences(true)
                 .max_occurrences(2)
-                .about("Hear the screams more clearly."),
+                .help("Hear the screams more clearly."),
         )
         .get_matches();
 

@@ -5,7 +5,6 @@ use std::time::Duration;
 use async_recursion::async_recursion;
 use futures::future;
 use log::{debug, error};
-use tokio::io::{self, AsyncWriteExt};
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::time;
 
@@ -268,36 +267,43 @@ impl<'a: 'static> Spirit<'a> {
             }
             Stmt::Say(name, exprs) => {
                 let value = self.eval_exprs(&state, exprs);
-                debug!("{:?} saying {}", name, value);
-                let mut stdout = io::stdout();
-                stdout
-                    .write_all((format!("{}\n", value)).as_bytes())
-                    .await
-                    .expect("Could not output text!");
+                match name {
+                    None => debug!("{} saying {:?} (is {})", self.name, exprs, value),
+                    Some(other_name) => debug!("{} saying {:?} (is {})", other_name, exprs, value),
+                }
+                self.send_message(Message::Say(value));
             }
             Stmt::ShambleUntil(expr, stmts) => loop {
                 let cond = self.eval_standalone_expr(&state, expr);
+                debug!("{} shambling until {:?} is true (currently {})", self.name, expr, cond);
                 match cond {
                     Value::Boolean(true) => {
+                        break;
+                    }
+                    Value::Boolean(false) => {
                         self.exec_stmts(&state, task, stmts).await;
                     }
-                    Value::Boolean(false) => {}
                     value => panic!("Not a boolean: {}", value),
                 }
             },
             Stmt::ShambleAround(stmts) => loop {
+                debug!("{} shambling around", self.name);
                 self.exec_stmts(&state, task, stmts).await;
             },
             Stmt::Stumble => {
+                debug!("{} stumbling", self.name);
                 *task.active_mut() = false;
             }
             Stmt::Taste(expr, stmts1, stmts2) => {
                 let cond = self.eval_standalone_expr(&state, expr);
+                debug!("{} tasting {:?} (tastes like {})...", self.name, expr, cond);
                 match cond {
                     Value::Boolean(true) => {
+                        debug!("...{} likes the taste", self.name);
                         self.exec_stmts(&state, task, stmts1).await;
                     }
                     Value::Boolean(false) => {
+                        debug!("...{} hates the taste", self.name);
                         self.exec_stmts(&state, task, stmts2).await;
                     }
                     value => panic!("Not a boolean: {}", value),
@@ -307,25 +313,33 @@ impl<'a: 'static> Spirit<'a> {
     }
 
     fn eval_exprs(&self, state: &Arc<State>, exprs: &Vec<Expr>) -> Value {
-        let mut stack = Vec::new();
+        debug!("{} evaluating expressions {:?}", self.name, exprs);
+        let mut stack = vec![Value::default()];
         for index in (0..exprs.len()).rev() {
             let expr = exprs.get(index).unwrap();
             self.eval_expr(state, expr, &mut stack);
+            debug!("{} evaluating expression {:?} (Stack {:?})", self.name, expr, stack);
         }
         stack.pop().unwrap()
     }
 
     fn eval_standalone_expr(&self, state: &Arc<State>, expr: &Expr) -> Value {
-        let mut stack = Vec::new();
+        let mut stack = vec![Value::default()];
         self.eval_expr(state, expr, &mut stack);
-        stack.pop().unwrap()
+        debug!("{} evaluating standalone expression {:?} to {}", self.name, expr, stack.last().unwrap());
+        let value = stack.pop().unwrap();
+        value
     }
 
     /// Evaluate the expression. The stack is modified accordingly. The returned value is put on top of the stack as well.
     fn eval_expr(&self, state: &Arc<State>, expr: &Expr, stack: &mut Vec<Value>) {
         match expr {
-            Expr::Moan(None) => stack.push(get_value(state, self.name)),
-            Expr::Moan(Some(other_name)) => stack.push(get_value(state, other_name)),
+            Expr::Moan(None) => {
+                *stack.last_mut().unwrap() = get_value(state, self.name) + stack.last().unwrap();
+            },
+            Expr::Moan(Some(other_name)) => {
+                *stack.last_mut().unwrap() = get_value(state, other_name) + stack.last().unwrap();
+            }
             Expr::Remembering(None, value) => {
                 stack.push(Value::Boolean(value == get_value(state, self.name)))
             }
