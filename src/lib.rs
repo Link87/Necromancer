@@ -7,10 +7,10 @@ use log::debug;
 
 pub mod parse;
 pub mod scroll;
-// pub mod summon;
+pub mod necro;
 pub mod value;
 
-// use summon::Scheduler;
+use necro::Necromancer;
 
 pub struct Config {
     path: String,
@@ -45,16 +45,17 @@ impl Config {
 }
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    let code = fs::read_to_string(config.path())?;
+    let code = Box::new(fs::read_to_string(config.path())?);
+    let code: &'static str = Box::leak(code);
 
     match (config.output_mode(), parse::parse(&code)) {
-        (OutputMode::SyntaxTree, Ok(syntax_tree)) => {
-            print!("{:#?}", &syntax_tree);
+        (OutputMode::SyntaxTree, Ok(scroll)) => {
+            print!("{:#?}", &scroll);
             Ok(())
         }
-        (OutputMode::Run, Ok(syntax_tree)) => {
-            debug!("{:?}", &syntax_tree);
-            //Scheduler::new(syntax_tree).schedule();
+        (OutputMode::Run, Ok(scroll)) => {
+            debug!("{:?}", &scroll);
+            Necromancer::unroll(scroll).initiate();
             Ok(())
         }
         (_, Err(error)) => Err(Box::new(nom::error::Error::new(

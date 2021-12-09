@@ -1,13 +1,13 @@
 use either::Either;
 use indexmap::IndexSet;
 use log::{debug, trace};
-use nom::bytes::complete::{tag, take_till};
+use nom::branch::alt;
+use nom::bytes::complete::{tag, take_till, take_until};
 use nom::character::complete::{alpha1, alphanumeric0, char, digit1, multispace0, multispace1};
 use nom::combinator::{all_consuming, eof, into, map, map_parser, map_res, not, peek, recognize};
 use nom::error::Error;
 use nom::multi::{many0, many1, many_till, separated_list1};
 use nom::sequence::{delimited, pair, preceded, separated_pair, terminated, tuple};
-use nom::{branch::alt, bytes::complete::take_until};
 use nom::{Finish, IResult};
 
 use crate::scroll::creature::{Creature, Species};
@@ -66,7 +66,7 @@ impl<'a> Parse<'a> for Creature<'a> {
         let active = match (species, spell) {
             (Species::Zombie, "animate") => true,
             (Species::Ghost, "disturb") => true,
-            (Species::Vampire, _) | (Species::Demon, _) | (Species::Djinn, _) => true,
+            (Species::Vampire, _) | (Species::Demon, _) | (Species::Djinn, _) => true, // "bind" spell
             _ => false,
         };
 
