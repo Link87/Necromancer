@@ -10,15 +10,24 @@ version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[[bin]]
+name = "summon"
+path = "src/main.rs"
+
 [dependencies]
-async-recursion = "0.3.2"
-clap = "3.0.0-rc.1"
-dashmap = "4.0.2"
-either = "1.6.1"
-env_logger = "0.9.0"
-fastrand = "1.5.0"
-futures = "0.3.18"
-indexmap = "1.7.0"
-log = "0.4.14"
-nom = "7.1.0"
-tokio = {version = "1.14.0", features = ["macros", "rt-multi-thread", "sync", "time"]}
+async-recursion = "1.0"
+clap = {version = "4.5", features = ["cargo"]}
+dashmap = "5.5"
+either = "1.10"
+env_logger = "0.11"
+fastrand = "2.0"
+futures = "0.3"
+indexmap = "2.2"
+log = "0.4"
+nom = "7.1"
+tokio = {version = "1.36", features = ["macros", "rt-multi-thread", "sync", "time"]}
+
+[profile.release]
+codegen-units = 1
+strip-debuginfo = true
+lto = true

@@ -1,7 +1,9 @@
 use std::process;
 
-use clap::App;
+use clap::command;
+use clap::value_parser;
 use clap::Arg;
+use clap::ArgAction;
 use clap::ArgGroup;
 use clap::ValueHint;
 use env_logger::Builder;
@@ -9,19 +11,9 @@ use log::LevelFilter;
 use log::{error, info};
 use necromancer::{Config, OutputMode};
 
-pub enum LogLevel {
-    Error,
-    Verbose,
-    Debug,
-}
 
 fn main() {
-    // let args: Vec<String> = env::args().collect();
-
-    let matches = App::new("Necromancer")
-        // .version(clap::crate_version!())
-        // .author(clap::crate_authors!())
-        // .about(clap::crate_description!())
+    let matches = command!()
         .arg(
             Arg::new("path")
                 .value_name("PATH")
@@ -34,29 +26,30 @@ fn main() {
             Arg::new("syntax_tree_mode")
                 .short('t')
                 .long("tree")
-                .help("Stop after parsing the scroll and print syntax tree."),
+                .action(ArgAction::SetTrue)
+                .help("Stop after parsing the scroll and print the AST."),
         )
         .group(ArgGroup::new("mode").args(&["syntax_tree_mode"]))
         .arg(
-            Arg::new("v")
+            Arg::new("verbose")
                 .short('v')
-                .multiple_occurrences(true)
-                .max_occurrences(2)
-                .help("Hear the screams more clearly."),
+                .action(ArgAction::Count)
+                .value_parser(value_parser!(u8).range(..=2))
+                .help("Hear the screams from the underworld more clearly."),
         )
         .get_matches();
 
     let mut builder = Builder::from_default_env();
-    match matches.occurrences_of("v") {
+    match matches.get_count("verbose") {
         0 => builder.filter_level(LevelFilter::Error),
         1 => builder.filter_level(LevelFilter::Info),
         2 => builder.filter_level(LevelFilter::Debug),
-        _ => panic!("Invalid log level!"),
+        _ => unreachable!("Invalid log level!"),
     };
     builder.init();
 
-    let mut config = Config::new(matches.value_of("path").unwrap().to_string());
-    if matches.is_present("syntax_tree_mode") {
+    let mut config = Config::new(matches.get_one::<String>("path").unwrap());
+    if matches.get_flag("syntax_tree_mode") {
         config.set_output_mode(OutputMode::SyntaxTree)
     }
 

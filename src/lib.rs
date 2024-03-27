@@ -24,9 +24,9 @@ pub enum OutputMode {
 }
 
 impl Config {
-    pub fn new(path: String) -> Config {
+    pub fn new(path: &str) -> Config {
         Config {
-            path,
+            path: String::from(path),
             output: OutputMode::Run,
         }
     }
