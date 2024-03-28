@@ -26,6 +26,7 @@ indexmap = "2.2"
 log = "0.4"
 nom = "7.1"
 tokio = {version = "1.36", features = ["macros", "rt-multi-thread", "sync", "time"]}
+zalgo = "0.2"
 
 [profile.release]
 codegen-units = 1
