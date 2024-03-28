@@ -1,6 +1,5 @@
 // #![warn(missing_docs)]
 #![doc = include_str!("../README.md")]
-use std::error::Error;
 use std::fs;
 
 use log::debug;
@@ -11,56 +10,32 @@ pub mod scroll;
 pub mod value;
 
 use necro::Necromancer;
+use scroll::Scroll;
 
-pub struct Config {
-    path: String,
-    output: OutputMode,
+/// The error type for this library.
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    /// An error occurred while trying to find the scroll.
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    /// An error occurred while trying to unroll and read the scroll.
+    #[error(transparent)]
+    Parse(#[from] nom::error::Error<&'static str>),
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum OutputMode {
-    Run,
-    SyntaxTree,
+/// Load the scroll from the given path and parse it.
+pub fn parse(path: &str) -> Result<Scroll<'static>, Error> {
+    let code: &'static str = Box::new(fs::read_to_string(path)?).leak();
+
+    let scroll = parse::parse(&code)?;
+    Ok(scroll)
 }
 
-impl Config {
-    pub fn new(path: &str) -> Config {
-        Config {
-            path: String::from(path),
-            output: OutputMode::Run,
-        }
-    }
+/// Perform the necromancy ritual with the scroll at the given location.
+pub fn summon(path: &str) -> Result<(), Error> {
+    let scroll = parse(path)?;
 
-    pub fn path(&self) -> &str {
-        &self.path[..]
-    }
-
-    pub fn output_mode(&self) -> OutputMode {
-        self.output
-    }
-
-    pub fn set_output_mode(&mut self, mode: OutputMode) {
-        self.output = mode;
-    }
-}
-
-pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    let code = Box::new(fs::read_to_string(config.path())?);
-    let code: &'static str = Box::leak(code);
-
-    match (config.output_mode(), parse::parse(&code)) {
-        (OutputMode::SyntaxTree, Ok(scroll)) => {
-            print!("{:#?}", &scroll);
-            Ok(())
-        }
-        (OutputMode::Run, Ok(scroll)) => {
-            debug!("{:?}", &scroll);
-            Necromancer::unroll(scroll).initiate();
-            Ok(())
-        }
-        (_, Err(error)) => Err(Box::new(nom::error::Error::new(
-            String::from(error.input),
-            error.code,
-        ))),
-    }
+    debug!("{:?}", &scroll);
+    Necromancer::unroll(scroll).initiate();
+    Ok(())
 }

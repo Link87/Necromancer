@@ -1,8 +1,8 @@
 use dashmap::DashMap;
+use tokio::sync::Notify;
 
 use crate::scroll::creature::Creature;
 use crate::value::Value;
-use tokio::sync::Notify;
 
 #[derive(Debug)]
 pub struct State {

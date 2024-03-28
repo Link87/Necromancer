@@ -8,14 +8,13 @@ use log::{debug, error};
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::time;
 
+use super::state::State;
+use super::Message;
 use crate::scroll::creature::{Creature, Species};
 use crate::scroll::expression::Expr;
 use crate::scroll::statement::Stmt;
 use crate::scroll::task::Task;
 use crate::value::Value;
-
-use super::state::State;
-use super::Message;
 
 // static DEMON_RESAMPLE_COUNT_RNG_DISTRIBUTION: Lazy<Uniform<u64>> = Lazy::new(|| Uniform::from(0..=5));
 
@@ -169,7 +168,8 @@ impl<'a: 'static> Spirit<'a> {
     async fn perform(self: Arc<Self>, state: Arc<State>, task: &'a Task<'a>) {
         debug!("{} performing task {}", self.name, task.name());
         let mut running_task = RunningTask::new();
-        self.exec_stmts(&state, &mut running_task, task.statements()).await;
+        self.exec_stmts(&state, &mut running_task, task.statements())
+            .await;
     }
 
     // #[async_recursion]
@@ -275,7 +275,10 @@ impl<'a: 'static> Spirit<'a> {
             }
             Stmt::ShambleUntil(expr, stmts) => loop {
                 let cond = self.eval_standalone_expr(&state, expr);
-                debug!("{} shambling until {:?} is true (currently {})", self.name, expr, cond);
+                debug!(
+                    "{} shambling until {:?} is true (currently {})",
+                    self.name, expr, cond
+                );
                 match cond {
                     Value::Boolean(true) => {
                         break;
@@ -318,7 +321,10 @@ impl<'a: 'static> Spirit<'a> {
         for index in (0..exprs.len()).rev() {
             let expr = exprs.get(index).unwrap();
             self.eval_expr(state, expr, &mut stack);
-            debug!("{} evaluating expression {:?} (Stack {:?})", self.name, expr, stack);
+            debug!(
+                "{} evaluating expression {:?} (Stack {:?})",
+                self.name, expr, stack
+            );
         }
         stack.pop().unwrap()
     }
@@ -326,7 +332,12 @@ impl<'a: 'static> Spirit<'a> {
     fn eval_standalone_expr(&self, state: &Arc<State>, expr: &Expr) -> Value {
         let mut stack = vec![Value::default()];
         self.eval_expr(state, expr, &mut stack);
-        debug!("{} evaluating standalone expression {:?} to {}", self.name, expr, stack.last().unwrap());
+        debug!(
+            "{} evaluating standalone expression {:?} to {}",
+            self.name,
+            expr,
+            stack.last().unwrap()
+        );
         let value = stack.pop().unwrap();
         value
     }
@@ -336,7 +347,7 @@ impl<'a: 'static> Spirit<'a> {
         match expr {
             Expr::Moan(None) => {
                 *stack.last_mut().unwrap() = get_value(state, self.name) + stack.last().unwrap();
-            },
+            }
             Expr::Moan(Some(other_name)) => {
                 *stack.last_mut().unwrap() = get_value(state, other_name) + stack.last().unwrap();
             }

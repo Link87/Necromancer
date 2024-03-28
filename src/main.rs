@@ -1,16 +1,8 @@
 use std::process;
 
-use clap::command;
-use clap::value_parser;
-use clap::Arg;
-use clap::ArgAction;
-use clap::ArgGroup;
-use clap::ValueHint;
+use clap::{command, value_parser, Arg, ArgAction, ArgGroup, ValueHint};
 use env_logger::Builder;
-use log::LevelFilter;
-use log::{error, info};
-use necromancer::{Config, OutputMode};
-
+use log::{error, info, LevelFilter};
 
 fn main() {
     let matches = command!()
@@ -48,15 +40,24 @@ fn main() {
     };
     builder.init();
 
-    let mut config = Config::new(matches.get_one::<String>("path").unwrap());
+    let path = matches.get_one::<String>("path").unwrap();
+
     if matches.get_flag("syntax_tree_mode") {
-        config.set_output_mode(OutputMode::SyntaxTree)
-    }
-
-    info!("Executing file {}", config.path());
-
-    if let Err(e) = necromancer::run(config) {
-        error!("Application error: {}", e);
-        process::exit(1);
+        info!("Printing AST for file {}", path);
+        match necromancer::parse(path) {
+            Ok(scroll) => {
+                print!("{:#?}", scroll);
+            }
+            Err(e) => {
+                error!("{}", e);
+                process::exit(1);
+            }
+        }
+    } else {
+        info!("Executing file {}", path);
+        if let Err(err) = necromancer::summon(path) {
+            error!("{}", err);
+            process::exit(1);
+        }
     }
 }

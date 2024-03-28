@@ -2,11 +2,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::necro::summon::{Candle, Spirit};
-use crate::scroll::creature::{Creature, Species};
-use crate::scroll::Scroll;
-use crate::value::Value;
-
 use dashmap::DashSet;
 use futures::future::{AbortHandle, Abortable};
 use futures::stream::FuturesUnordered;
@@ -17,6 +12,11 @@ use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinHandle;
 use tokio::time;
+
+use crate::necro::summon::{Candle, Spirit};
+use crate::scroll::creature::{Creature, Species};
+use crate::scroll::Scroll;
+use crate::value::Value;
 
 mod state;
 mod summon;
