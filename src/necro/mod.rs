@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -7,6 +6,7 @@ use futures::future::{AbortHandle, Abortable};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use log::{debug, warn};
+use smol_str::SmolStr;
 use state::State;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::sync::{Mutex, RwLock};
@@ -14,18 +14,18 @@ use tokio::task::JoinHandle;
 use tokio::time;
 
 use crate::necro::summon::{Candle, Spirit};
-use crate::scroll::creature::{Creature, Species};
-use crate::scroll::Scroll;
+use crate::scroll::entity::{Entity, Species};
+use crate::scroll::{EntityList, Scroll};
 use crate::value::Value;
 
 mod state;
 mod summon;
 
-pub struct Necromancer<'a> {
-    scroll: Scroll<'a>,
+pub struct Necromancer {
+    scroll: Scroll,
 }
 
-impl Necromancer<'static> {
+impl Necromancer {
     pub fn unroll(scroll: Scroll) -> Necromancer {
         Necromancer { scroll }
     }
@@ -64,19 +64,19 @@ impl Necromancer<'static> {
             while let Some(message) = Ritual::received(Arc::clone(&ritual_msg)).await {
                 match message {
                     Message::Animate(name) => {
-                        let creature = creatures.get(name).unwrap();
+                        let creature = creatures.get(&name).unwrap();
                         if matches!(creature.species(), Species::Zombie) {
                             Arc::clone(&ritual_msg).summon(creature).await;
                         }
                     }
                     Message::Disturb(name) => {
-                        let creature = creatures.get(name).unwrap();
+                        let creature = creatures.get(&name).unwrap();
                         if matches!(creature.species(), Species::Ghost) {
                             Arc::clone(&ritual_msg).summon(creature).await;
                         }
                     }
                     Message::Invoke(name) => {
-                        let creature = creatures.get(name).unwrap();
+                        let creature = creatures.get(&name).unwrap();
                         Arc::clone(&ritual_msg).summon(creature).await;
                     }
                     Message::Say(value) => {
@@ -97,7 +97,7 @@ impl Necromancer<'static> {
     }
 }
 
-pub struct Ritual<'a> {
+pub struct Ritual {
     /// The global state. Reference shared with the [`Spirit`]s.
     state: Arc<State>,
     /// Collection of `Future`s that are associated with an entity.
@@ -110,19 +110,19 @@ pub struct Ritual<'a> {
     /// A candle is lit for every copy of an entity. This is used to count
     /// how many copies of an entity are alive.
     /// The `Ritual` is finished if all candles go out and the program can be killed.
-    candles: DashSet<Candle<'a>>,
+    candles: DashSet<Candle>,
     /// Sender of an unbounded channel. To be distibuted to the entities.
-    sender: UnboundedSender<Message<'a>>,
+    sender: UnboundedSender<Message>,
     /// Receiver of an unbounded channel. To be kept to receive messages from entities.
-    receiver: Mutex<UnboundedReceiver<Message<'a>>>,
+    receiver: Mutex<UnboundedReceiver<Message>>,
 }
 
-impl<'a: 'static> Ritual<'a> {
+impl<'a: 'static> Ritual {
     /// Prepare the ritual and summon any of the listed creatures.
-    async fn new(creatures: &'a HashMap<&'a str, Creature<'a>>) -> Arc<Ritual<'a>> {
+    async fn new(entities: &'a EntityList) -> Arc<Ritual> {
         let (tx, rx) = mpsc::unbounded_channel();
         let ritual = Arc::new(Ritual {
-            state: Arc::new(State::from(creatures.values())),
+            state: Arc::new(State::from(entities.values())),
             tasks: RwLock::new(FuturesUnordered::new()),
             abort_handles: RwLock::new(Vec::new()),
             candles: DashSet::new(),
@@ -132,7 +132,7 @@ impl<'a: 'static> Ritual<'a> {
 
         debug!("{:?}", ritual.state);
 
-        for creature in creatures.values() {
+        for creature in entities.values() {
             Self::summon(Arc::clone(&ritual), creature).await;
         }
 
@@ -140,7 +140,7 @@ impl<'a: 'static> Ritual<'a> {
     }
 
     /// Summon a creature in the [`Ritual`].
-    async fn summon(self: Arc<Self>, creature: &'a Creature<'a>) {
+    async fn summon(self: Arc<Self>, creature: &'a Entity) {
         let spirit = Spirit::summon(
             creature.name(),
             creature,
@@ -173,7 +173,7 @@ impl<'a: 'static> Ritual<'a> {
         }
     }
 
-    async fn received(self: Arc<Self>) -> Option<Message<'a>> {
+    async fn received(self: Arc<Self>) -> Option<Message> {
         self.receiver.lock().await.recv().await
     }
 
@@ -185,9 +185,9 @@ impl<'a: 'static> Ritual<'a> {
 }
 
 #[derive(Debug, Clone)]
-pub enum Message<'a> {
-    Animate(&'a str),
-    Disturb(&'a str),
-    Invoke(&'a str),
+pub enum Message {
+    Animate(SmolStr),
+    Disturb(SmolStr),
+    Invoke(SmolStr),
     Say(Value),
 }

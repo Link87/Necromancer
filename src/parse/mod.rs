@@ -1,5 +1,4 @@
 use either::Either;
-use indexmap::IndexSet;
 use log::{debug, trace};
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_till, take_until};
@@ -10,7 +9,7 @@ use nom::multi::{many0, many1, many_till, separated_list1};
 use nom::sequence::{delimited, pair, preceded, separated_pair, terminated, tuple};
 use nom::{Finish, IResult};
 
-use crate::scroll::creature::{Creature, Species};
+use crate::scroll::entity::{Entity, Species, TaskList};
 use crate::scroll::expression::Expr;
 use crate::scroll::statement::Stmt;
 use crate::scroll::task::Task;
@@ -26,16 +25,16 @@ trait Parse<'a> {
         Self: Sized;
 }
 
-impl<'a> Parse<'a> for Scroll<'a> {
+impl<'a> Parse<'a> for Scroll {
     fn parse(code: &'a str) -> IResult<&'a str, Scroll> {
         trace!("Code (syntax tree): {}", code);
         multispace0(code)?;
-        into(many1(terminated(Creature::parse, alt((eof, multispace1)))))(code)
+        into(many1(terminated(Entity::parse, alt((eof, multispace1)))))(code)
     }
 }
 
-impl<'a> Parse<'a> for Creature<'a> {
-    fn parse(code: &'a str) -> IResult<&'a str, Creature> {
+impl<'a> Parse<'a> for Entity {
+    fn parse(code: &'a str) -> IResult<&'a str, Entity> {
         trace!("Code (creature): {}", code);
         let (code, (name, species)) = terminated(
             separated_pair(
@@ -70,6 +69,7 @@ impl<'a> Parse<'a> for Creature<'a> {
             _ => false,
         };
 
+        // Separate values and tasks into different Vecs.
         let statements = statements
             .into_iter()
             .partition::<Vec<Either<Value, Task>>, _>(Either::is_left);
@@ -83,7 +83,8 @@ impl<'a> Parse<'a> for Creature<'a> {
             .1
             .into_iter()
             .map(Either::unwrap_right)
-            .collect::<IndexSet<Task>>();
+            .map(|task| (task.name(), task))
+            .collect::<TaskList>();
 
         debug!(
             "Summoning creature {} of species {:?} with {} tasks, using {}.",
@@ -93,7 +94,7 @@ impl<'a> Parse<'a> for Creature<'a> {
             spell
         );
 
-        Ok((code, Creature::summon(name, species, active, memory, tasks)))
+        Ok((code, Entity::summon(name, species, active, memory, tasks)))
     }
 }
 
@@ -132,7 +133,7 @@ impl<'a> Parse<'a> for Species {
     }
 }
 
-impl<'a> Parse<'a> for Task<'a> {
+impl<'a> Parse<'a> for Task {
     fn parse(code: &'a str) -> IResult<&'a str, Task> {
         trace!("Code (task): {}", code);
         map(
@@ -149,7 +150,7 @@ impl<'a> Parse<'a> for Task<'a> {
     }
 }
 
-impl<'a> Parse<'a> for Stmt<'a> {
+impl<'a> Parse<'a> for Stmt {
     fn parse(code: &'a str) -> IResult<&'a str, Stmt> {
         trace!("Code (statement): {}", code);
         alt((
@@ -157,31 +158,31 @@ impl<'a> Parse<'a> for Stmt<'a> {
                 separated_pair(tag("animatex"), multispace1, parse_identifier),
                 |(_, name)| {
                     // TODO
-                    Stmt::Animate(Some(name))
+                    Stmt::Animate(Some(name.into()))
                 },
             ),
             map(tag("animatex"), |_| Stmt::Animate(None)), // TODO
             map(
                 separated_pair(tag("banish"), multispace1, parse_identifier),
-                |(_, name)| Stmt::Banish(Some(name)),
+                |(_, name)| Stmt::Banish(Some(name.into())),
             ),
             map(tag("banish"), |_| Stmt::Banish(None)),
             map(
                 separated_pair(tag("disturbx"), multispace1, parse_identifier),
                 |(_, name)| {
                     // TODO
-                    Stmt::Disturb(Some(name))
+                    Stmt::Disturb(Some(name.into()))
                 },
             ),
             map(tag("disturbx"), |_| Stmt::Disturb(None)), // TODO
             map(
                 separated_pair(tag("forget"), multispace1, parse_identifier),
-                |(_, name)| Stmt::Forget(Some(name)),
+                |(_, name)| Stmt::Forget(Some(name.into())),
             ),
             map(tag("forget"), |_| Stmt::Forget(None)),
             map(
                 separated_pair(tag("invoke"), multispace1, parse_identifier),
-                |(_, name)| Stmt::Invoke(Some(name)),
+                |(_, name)| Stmt::Invoke(Some(name.into())),
             ),
             map(tag("invoke"), |_| Stmt::Invoke(None)),
             map(
@@ -196,7 +197,7 @@ impl<'a> Parse<'a> for Stmt<'a> {
                     multispace1,
                     Vec::<Expr>::parse,
                 )),
-                |(_, _, name, _, exprs)| Stmt::Remember(Some(name), exprs),
+                |(_, _, name, _, exprs)| Stmt::Remember(Some(name.into()), exprs),
             ),
             map(
                 separated_pair(tag("say"), multispace1, Vec::<Expr>::parse),
@@ -210,7 +211,7 @@ impl<'a> Parse<'a> for Stmt<'a> {
                     multispace1,
                     Vec::<Expr>::parse,
                 )),
-                |(_, _, name, _, exprs)| Stmt::Say(Some(name), exprs),
+                |(_, _, name, _, exprs)| Stmt::Say(Some(name.into()), exprs),
             ),
             map(
                 delimited(
@@ -260,20 +261,20 @@ impl<'a> Parse<'a> for Stmt<'a> {
     }
 }
 
-impl<'a> Parse<'a> for Vec<Expr<'a>> {
+impl<'a> Parse<'a> for Vec<Expr> {
     fn parse(code: &'a str) -> IResult<&'a str, Vec<Expr>> {
         trace!("Code (expression vec): {}", code);
         separated_list1(multispace1, Expr::parse)(code)
     }
 }
 
-impl<'a> Parse<'a> for Expr<'a> {
+impl<'a> Parse<'a> for Expr {
     fn parse(code: &'a str) -> IResult<&'a str, Expr> {
         trace!("Code (expression): {}", code);
         alt((
             map(
                 separated_pair(tag("moan"), multispace1, parse_identifier),
-                |(_, name)| Expr::Moan(Some(name)),
+                |(_, name)| Expr::Moan(Some(name.into())),
             ),
             map(tag("moan"), |_| Expr::Moan(None)),
             map(
@@ -284,7 +285,7 @@ impl<'a> Parse<'a> for Expr<'a> {
                     multispace1,
                     Value::parse,
                 )),
-                |(_, _, name, _, value)| Expr::Remembering(Some(name), value),
+                |(_, _, name, _, value)| Expr::Remembering(Some(name.into()), value),
             ),
             map(
                 separated_pair(tag("remembering"), multispace1, Value::parse),

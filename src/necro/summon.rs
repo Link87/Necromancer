@@ -1,16 +1,15 @@
-use std::iter;
 use std::sync::Arc;
 use std::time::Duration;
 
 use async_recursion::async_recursion;
-use futures::future;
 use log::{debug, error};
+use smol_str::SmolStr;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::time;
 
 use super::state::State;
 use super::Message;
-use crate::scroll::creature::{Creature, Species};
+use crate::scroll::entity::{Entity, Species};
 use crate::scroll::expression::Expr;
 use crate::scroll::statement::Stmt;
 use crate::scroll::task::Task;
@@ -18,13 +17,13 @@ use crate::value::Value;
 
 // static DEMON_RESAMPLE_COUNT_RNG_DISTRIBUTION: Lazy<Uniform<u64>> = Lazy::new(|| Uniform::from(0..=5));
 
-pub type Candle<'a> = Arc<&'a str>;
+pub type Candle = Arc<SmolStr>;
 
 // Represents a summoned creature. Fields are read-only.
 pub struct Spirit<'a> {
-    name: &'a str,
-    creature: &'a Creature<'a>,
-    sender: UnboundedSender<Message<'a>>,
+    name: SmolStr,
+    creature: &'a Entity,
+    sender: UnboundedSender<Message>,
 }
 
 struct RunningTask {
@@ -47,9 +46,9 @@ impl RunningTask {
 
 impl<'a: 'static> Spirit<'a> {
     pub fn summon(
-        name: &'a str,
-        creature: &'a Creature<'a>,
-        sender: UnboundedSender<Message<'a>>,
+        name: SmolStr,
+        creature: &'a Entity,
+        sender: UnboundedSender<Message>,
     ) -> Arc<Spirit<'a>> {
         Arc::new(Spirit {
             name,
@@ -58,10 +57,10 @@ impl<'a: 'static> Spirit<'a> {
         })
     }
 
-    pub async fn unleash(self: Arc<Self>, state: Arc<State>, _candle: Candle<'a>) {
+    pub async fn unleash(self: Arc<Self>, state: Arc<State>, _candle: Candle) {
         match self.creature.species() {
             Species::Zombie => {
-                for task in self.creature.tasks() {
+                for task in self.creature.tasks().values() {
                     if let Err(e) =
                         tokio::spawn(Arc::clone(&self).perform(Arc::clone(&state), task)).await
                     {
@@ -70,7 +69,7 @@ impl<'a: 'static> Spirit<'a> {
                 }
             }
             Species::Ghost => {
-                for task in self.creature.tasks() {
+                for task in self.creature.tasks().values() {
                     if let Err(e) =
                         tokio::spawn(Arc::clone(&self).perform(Arc::clone(&state), task)).await
                     {
@@ -80,10 +79,9 @@ impl<'a: 'static> Spirit<'a> {
                 }
             }
             Species::Vampire => {
-                let mut task_ids: Vec<usize> = (0..self.creature.tasks().len()).collect();
-                fastrand::shuffle(&mut task_ids);
-                for idx in task_ids {
-                    let task = self.creature.tasks().get_index(idx).unwrap();
+                let mut tasks: Vec<&Task> = self.creature.tasks().values().collect();
+                fastrand::shuffle(&mut tasks);
+                for task in tasks {
                     if let Err(e) =
                         tokio::spawn(Arc::clone(&self).perform(Arc::clone(&state), task)).await
                     {
@@ -134,38 +132,39 @@ impl<'a: 'static> Spirit<'a> {
                 // }
             }
             Species::Djinn => {
-                let sample_size = fastrand::usize(1..=10 * self.creature.tasks().len());
-                let mut task_ids: Vec<usize> =
-                    iter::repeat_with(|| fastrand::usize(0..self.creature.tasks().len()))
-                        .take(sample_size)
-                        .collect();
+                todo!()
+            //     let sample_size = fastrand::usize(1..=10 * self.creature.tasks().len());
+            //     let mut task_ids: Vec<usize> =
+            //         iter::repeat_with(|| fastrand::usize(0..self.creature.tasks().len()))
+            //             .take(sample_size)
+            //             .collect();
 
-                debug!("Djinn task order {:?}", &task_ids);
-                while !task_ids.is_empty() {
-                    let mut tasks = Vec::new();
-                    for _ in
-                        1..=fastrand::usize(1..=(f32::ceil(task_ids.len() as f32 / 5.0) as usize))
-                    {
-                        let selected = task_ids.pop().unwrap();
-                        let task = self.creature.tasks().get_index(selected).unwrap();
-                        tasks.push(tokio::spawn(tokio::spawn(
-                            Arc::clone(&self).perform(Arc::clone(&state), task),
-                        )));
-                    }
-                    for e in future::join_all(tasks)
-                        .await
-                        .into_iter()
-                        .filter_map(|t| t.err())
-                    {
-                        error!("{}", e);
-                    }
-                }
+            //     debug!("Djinn task order {:?}", &task_ids);
+            //     while !task_ids.is_empty() {
+            //         let mut tasks = Vec::new();
+            //         for _ in
+            //             1..=fastrand::usize(1..=(f32::ceil(task_ids.len() as f32 / 5.0) as usize))
+            //         {
+            //             let selected = task_ids.pop().unwrap();
+            //             let task = self.creature.tasks().get_index(selected).unwrap();
+            //             tasks.push(tokio::spawn(tokio::spawn(
+            //                 Arc::clone(&self).perform(Arc::clone(&state), task),
+            //             )));
+            //         }
+            //         for e in future::join_all(tasks)
+            //             .await
+            //             .into_iter()
+            //             .filter_map(|t| t.err())
+            //         {
+            //             error!("{}", e);
+            //         }
+            //     }
             }
         }
     }
 
     // perform a task asynchronously
-    async fn perform(self: Arc<Self>, state: Arc<State>, task: &'a Task<'a>) {
+    async fn perform(self: Arc<Self>, state: Arc<State>, task: &'a Task) {
         debug!("{} performing task {}", self.name, task.name());
         let mut running_task = RunningTask::new();
         self.exec_stmts(&state, &mut running_task, task.statements())
@@ -177,13 +176,13 @@ impl<'a: 'static> Spirit<'a> {
         &self,
         state: &Arc<State>,
         task: &mut RunningTask,
-        stmts: &'a Vec<Stmt<'a>>,
+        stmts: &'a Vec<Stmt>,
     ) {
         debug!("{} executing statements {:?}", self.name, stmts);
         for stmt in stmts {
             // wait until entity is active
             loop {
-                if state.knowledge().get(self.name).unwrap().active() {
+                if state.knowledge().get(&self.name).unwrap().active() {
                     break;
                 } else {
                     // sleep until notified, then check again
@@ -205,7 +204,7 @@ impl<'a: 'static> Spirit<'a> {
     }
 
     #[async_recursion]
-    async fn exec_stmt(&self, state: &Arc<State>, task: &mut RunningTask, stmt: &'a Stmt<'a>) {
+    async fn exec_stmt(&self, state: &Arc<State>, task: &mut RunningTask, stmt: &'a Stmt) {
         match stmt {
             Stmt::Animate(None) => {
                 debug!(
@@ -213,15 +212,15 @@ impl<'a: 'static> Spirit<'a> {
                     self.name,
                     self.creature.species(),
                 );
-                self.send_message(Message::Animate(self.name));
+                self.send_message(Message::Animate(self.name.clone()));
             }
             Stmt::Animate(Some(other_name)) => {
                 debug!("{} tries to animate {}", self.name, other_name);
-                self.send_message(Message::Animate(other_name));
+                self.send_message(Message::Animate(other_name.clone()));
             }
             Stmt::Banish(None) => {
                 debug!("{} banishing itself", self.name);
-                set_active(&state, self.name, false);
+                set_active(&state, self.name.as_str(), false);
             }
             Stmt::Banish(Some(other_name)) => {
                 debug!("{} banishing {}", self.name, other_name);
@@ -233,15 +232,15 @@ impl<'a: 'static> Spirit<'a> {
                     self.name,
                     self.creature.species(),
                 );
-                self.send_message(Message::Disturb(self.name));
+                self.send_message(Message::Disturb(self.name.clone()));
             }
             Stmt::Disturb(Some(other_name)) => {
                 debug!("{} tries to disturb {}", self.name, other_name);
-                self.send_message(Message::Disturb(other_name));
+                self.send_message(Message::Disturb(other_name.clone()));
             }
             Stmt::Forget(None) => {
                 debug!("{} forgets its value", self.name);
-                set_value(&state, self.name, Value::default())
+                set_value(&state, self.name.as_str(), Value::default())
             }
             Stmt::Forget(Some(other_name)) => {
                 debug!("{} makes {} forget its value", self.name, other_name);
@@ -249,16 +248,16 @@ impl<'a: 'static> Spirit<'a> {
             }
             Stmt::Invoke(None) => {
                 debug!("{} invoking a new copy of itself", self.name);
-                self.send_message(Message::Invoke(self.name));
+                self.send_message(Message::Invoke(self.name.clone()));
             }
             Stmt::Invoke(Some(other_name)) => {
                 debug!("{} invoking a new copy of {}", self.name, other_name);
-                self.send_message(Message::Invoke(other_name));
+                self.send_message(Message::Invoke(other_name.clone()));
             }
             Stmt::Remember(None, exprs) => {
                 let value = self.eval_exprs(&state, exprs);
                 debug!("{} remembering {} (self)", self.name, value);
-                set_value(&state, self.name, value)
+                set_value(&state, self.name.as_str(), value)
             }
             Stmt::Remember(Some(other_name), exprs) => {
                 let value = self.eval_exprs(&state, exprs);
@@ -346,13 +345,13 @@ impl<'a: 'static> Spirit<'a> {
     fn eval_expr(&self, state: &Arc<State>, expr: &Expr, stack: &mut Vec<Value>) {
         match expr {
             Expr::Moan(None) => {
-                *stack.last_mut().unwrap() = get_value(state, self.name) + stack.last().unwrap();
+                *stack.last_mut().unwrap() = get_value(state, self.name.as_str()) + stack.last().unwrap();
             }
             Expr::Moan(Some(other_name)) => {
                 *stack.last_mut().unwrap() = get_value(state, other_name) + stack.last().unwrap();
             }
             Expr::Remembering(None, value) => {
-                stack.push(Value::Boolean(value == get_value(state, self.name)))
+                stack.push(Value::Boolean(value == get_value(state, self.name.as_str())))
             }
             Expr::Remembering(Some(other_name), value) => {
                 stack.push(Value::Boolean(value == get_value(state, other_name)))
@@ -368,7 +367,7 @@ impl<'a: 'static> Spirit<'a> {
         }
     }
 
-    fn send_message(&self, message: Message<'a>) {
+    fn send_message(&self, message: Message) {
         self.sender
             .send(message)
             .expect("Message receiver dropped before task could finish!");

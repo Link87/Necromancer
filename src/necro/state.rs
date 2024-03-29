@@ -1,12 +1,13 @@
 use dashmap::DashMap;
+use smol_str::SmolStr;
 use tokio::sync::Notify;
 
-use crate::scroll::creature::Creature;
+use crate::scroll::entity::Entity;
 use crate::value::Value;
 
 #[derive(Debug)]
 pub struct State {
-    knowledge: DashMap<&'static str, SpiritState>,
+    knowledge: DashMap<SmolStr, SpiritState>,
     notifier: Notify,
 }
 
@@ -18,7 +19,7 @@ impl State {
         }
     }
 
-    pub fn knowledge(&self) -> &DashMap<&'static str, SpiritState> {
+    pub fn knowledge(&self) -> &DashMap<SmolStr, SpiritState> {
         &self.knowledge
     }
 
@@ -27,7 +28,7 @@ impl State {
     }
 }
 
-impl<'a, I: Iterator<Item = &'a Creature<'static>>> From<I> for State {
+impl<'a, I: Iterator<Item = &'a Entity>> From<I> for State {
     fn from(creatures: I) -> Self {
         let state = State::new();
         for creature in creatures {
@@ -74,8 +75,8 @@ impl SpiritState {
     }
 }
 
-impl<'a> From<&Creature<'a>> for SpiritState {
-    fn from(creature: &Creature) -> SpiritState {
+impl From<&Entity> for SpiritState {
+    fn from(creature: &Entity) -> SpiritState {
         SpiritState::new(Value::from(creature.moan()), creature.active())
     }
 }

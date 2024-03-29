@@ -1,36 +1,39 @@
 //! Scrolls are the internal representation of ZOMBIE source code. This module and its submodules contain the data type definitions for recipes.
 use std::collections::HashMap;
 
-use creature::Creature;
+use entity::Entity;
+use smol_str::SmolStr;
 
-pub mod creature;
+pub mod entity;
 pub mod expression;
 pub mod statement;
 pub mod task;
 
+pub type EntityList = HashMap<SmolStr, Entity>;
+
 /// A mysterious scroll with instructions for necromancers and their summoning rituals.
 ///
 /// Contains a list of creatures to summon.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Scroll<'a> {
+#[derive(Debug, Clone)]
+pub struct Scroll {
     // use hash map to store values on heap.
-    creatures: HashMap<&'a str, Creature<'a>>,
+    entities: EntityList,
 }
 
-impl<'a> Scroll<'a> {
+impl Scroll {
     /// Create a new recipe from a set of creatures.
-    fn new(creatures: HashMap<&'a str, Creature<'a>>) -> Scroll<'a> {
-        Scroll { creatures }
+    fn new(creatures: EntityList) -> Scroll {
+        Scroll { entities: creatures }
     }
 
     /// Return the creatures listed in the recipe.
-    pub fn creatures(&self) -> &HashMap<&'a str, Creature> {
-        &self.creatures
+    pub fn creatures(&self) -> &EntityList {
+        &self.entities
     }
 }
 
-impl<'a> From<Vec<Creature<'a>>> for Scroll<'a> {
-    fn from(creatures: Vec<Creature<'a>>) -> Scroll<'a> {
+impl From<Vec<Entity>> for Scroll {
+    fn from(creatures: Vec<Entity>) -> Scroll {
         Scroll::new(creatures.into_iter().map(|c| (c.name(), c)).collect())
     }
 }

@@ -1,26 +1,25 @@
-use std::borrow::Borrow;
-use std::hash::{Hash, Hasher};
+use smol_str::SmolStr;
 
 use super::statement::Stmt;
 
 #[derive(Debug, Clone)]
-pub struct Task<'a> {
-    name: &'a str,
+pub struct Task {
+    name: SmolStr,
     active: bool,
-    stmts: Vec<Stmt<'a>>,
+    stmts: Vec<Stmt>,
 }
 
-impl<'a> Task<'a> {
-    pub fn new(name: &'a str, active: bool, stmts: Vec<Stmt<'a>>) -> Task<'a> {
+impl Task {
+    pub fn new(name: &str, active: bool, stmts: Vec<Stmt>) -> Task {
         Task {
-            name,
+            name: SmolStr::from(name),
             active,
             stmts,
         }
     }
 
-    pub fn name(&self) -> &'a str {
-        &self.name
+    pub fn name(&self) -> SmolStr {
+        self.name.clone()
     }
 
     pub fn active(&self) -> bool {
@@ -29,26 +28,5 @@ impl<'a> Task<'a> {
 
     pub fn statements(&self) -> &Vec<Stmt> {
         &self.stmts
-    }
-}
-
-/// Two tasks are considered equal, if and only if their names are equal.
-impl PartialEq<Task<'_>> for Task<'_> {
-    fn eq(&self, other: &Task) -> bool {
-        self.name == other.name
-    }
-}
-
-impl Eq for Task<'_> {}
-
-impl Hash for Task<'_> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-    }
-}
-
-impl<'a> Borrow<str> for Task<'a> {
-    fn borrow(&self) -> &'a str {
-        return self.name;
     }
 }

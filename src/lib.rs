@@ -24,7 +24,7 @@ pub enum Error {
 }
 
 /// Load the scroll from the given path and parse it.
-pub fn parse(path: &str) -> Result<Scroll<'static>, Error> {
+pub fn parse(path: &str) -> Result<Scroll, Error> {
     let code: &'static str = Box::new(fs::read_to_string(path)?).leak();
 
     let scroll = parse::parse(&code)?;

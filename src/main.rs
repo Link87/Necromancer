@@ -5,6 +5,7 @@ use env_logger::Builder;
 use log::{error, info, LevelFilter};
 
 fn main() {
+    // Parse command line arguments.
     let matches = command!()
         .arg(
             Arg::new("path")
@@ -31,6 +32,7 @@ fn main() {
         )
         .get_matches();
 
+    // Initialize the logger. The log level depends on the number of -v flags in the CLI arguments.
     let mut builder = Builder::from_default_env();
     match matches.get_count("verbose") {
         0 => builder.filter_level(LevelFilter::Error),
@@ -42,6 +44,8 @@ fn main() {
 
     let path = matches.get_one::<String>("path").unwrap();
 
+    // If the -t flag is set, print the AST and exit.
+    // Otherwise, perfom the necromancy ritual.
     if matches.get_flag("syntax_tree_mode") {
         info!("Printing AST for file {}", path);
         match necromancer::parse(path) {

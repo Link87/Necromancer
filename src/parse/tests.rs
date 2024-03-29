@@ -387,7 +387,7 @@ animate
             .statements()
             .get(4)
             .unwrap(),
-        &Stmt::Say(Some("Markus"), vec![Expr::Value(Value::Integer(-161))])
+        &Stmt::Say(Some("Markus".into()), vec![Expr::Value(Value::Integer(-161))])
     );
     assert_eq!(
         recipe
@@ -400,7 +400,7 @@ animate
             .statements()
             .get(5)
             .unwrap(),
-        &Stmt::Say(Some("Dorni"), vec![Expr::Value(Value::Integer(1312))])
+        &Stmt::Say(Some("Dorni".into()), vec![Expr::Value(Value::Integer(1312))])
     );
     assert_eq!(
         recipe
@@ -414,7 +414,7 @@ animate
             .get(6)
             .unwrap(),
         &Stmt::Say(
-            Some("Isa"),
+            Some("Isa".into()),
             vec![Expr::Value(Value::String(String::from("Hello World")))]
         )
     );
@@ -521,7 +521,7 @@ animate
             .statements()
             .get(4)
             .unwrap(),
-        &Stmt::Remember(Some("Markus"), vec![Expr::Value(Value::Integer(-161))])
+        &Stmt::Remember(Some("Markus".into()), vec![Expr::Value(Value::Integer(-161))])
     );
     assert_eq!(
         recipe
@@ -534,7 +534,7 @@ animate
             .statements()
             .get(5)
             .unwrap(),
-        &Stmt::Remember(Some("Dorni"), vec![Expr::Value(Value::Integer(1312))])
+        &Stmt::Remember(Some("Dorni".into()), vec![Expr::Value(Value::Integer(1312))])
     );
     assert_eq!(
         recipe
@@ -548,7 +548,7 @@ animate
             .get(6)
             .unwrap(),
         &Stmt::Remember(
-            Some("Isa"),
+            Some("Isa".into()),
             vec![Expr::Value(Value::String(String::from("Hello World")))]
         )
     );
@@ -564,12 +564,12 @@ summon
     task Test1
         remember -161
         remember 1312
-        animatex
-        animatex Peter
+        animate
+        animate Peter
         banish
         banish Peter
-        disturbx
-        disturbx Peter
+        disturb
+        disturb Peter
         forget Peter
         forget
         invoke
@@ -644,7 +644,7 @@ animate
             .statements()
             .get(3)
             .unwrap(),
-        &Stmt::Animate(Some("Peter")),
+        &Stmt::Animate(Some("Peter".into())),
     );
     assert_eq!(
         recipe
@@ -670,7 +670,7 @@ animate
             .statements()
             .get(5)
             .unwrap(),
-        &Stmt::Banish(Some("Peter")),
+        &Stmt::Banish(Some("Peter".into())),
     );
     assert_eq!(
         recipe
@@ -696,7 +696,7 @@ animate
             .statements()
             .get(7)
             .unwrap(),
-        &Stmt::Disturb(Some("Peter")),
+        &Stmt::Disturb(Some("Peter".into())),
     );
     assert_eq!(
         recipe
@@ -709,7 +709,7 @@ animate
             .statements()
             .get(8)
             .unwrap(),
-        &Stmt::Forget(Some("Peter")),
+        &Stmt::Forget(Some("Peter".into())),
     );
     assert_eq!(
         recipe
@@ -748,7 +748,7 @@ animate
             .statements()
             .get(11)
             .unwrap(),
-        &Stmt::Invoke(Some("Peter")),
+        &Stmt::Invoke(Some("Peter".into())),
     );
 }
 
@@ -934,29 +934,29 @@ animate";
             assert_eq!(statements.len(), 5);
             assert_eq!(
                 statements[0],
-                Stmt::Say(None, vec![Expr::Moan(Some("Zombie1"))])
+                Stmt::Say(None, vec![Expr::Moan(Some("Zombie1".into()))])
             );
             assert_eq!(
                 statements[1],
-                Stmt::Say(None, vec![Expr::Moan(Some("Zombie2"))])
+                Stmt::Say(None, vec![Expr::Moan(Some("Zombie2".into()))])
             );
             assert_eq!(
                 statements[2],
                 Stmt::Remember(
-                    Some("Zombie1"),
-                    vec![Expr::Moan(Some("Zombie1")), Expr::Moan(Some("Zombie2"))]
+                    Some("Zombie1".into()),
+                    vec![Expr::Moan(Some("Zombie1".into())), Expr::Moan(Some("Zombie2".into()))]
                 )
             );
             assert_eq!(
                 statements[3],
                 Stmt::Remember(
-                    Some("Zombie2"),
-                    vec![Expr::Moan(Some("Zombie1")), Expr::Moan(Some("Zombie2"))]
+                    Some("Zombie2".into()),
+                    vec![Expr::Moan(Some("Zombie1".into())), Expr::Moan(Some("Zombie2".into()))]
                 )
             );
             assert_eq!(
                 statements[4],
-                Stmt::Remember(None, vec![Expr::Moan(Some("Zombie2"))])
+                Stmt::Remember(None, vec![Expr::Moan(Some("Zombie2".into()))])
             );
         }
         _ => assert!(false),
@@ -1167,9 +1167,9 @@ animate
         &Stmt::Remember(
             None,
             vec![
-                Expr::Moan(Some("X")),
+                Expr::Moan(Some("X".into())),
                 Expr::Moan(None),
-                Expr::Moan(Some("Y"))
+                Expr::Moan(Some("Y".into()))
             ]
         )
     );
@@ -1235,8 +1235,8 @@ animate
         &Stmt::Say(
             None,
             vec![
-                Expr::Moan(Some("Y")),
-                Expr::Remembering(Some("X"), Value::Integer(1312))
+                Expr::Moan(Some("Y".into())),
+                Expr::Remembering(Some("X".into()), Value::Integer(1312))
             ]
         ),
     );
@@ -1256,7 +1256,7 @@ animate
             vec![
                 Expr::Rend,
                 Expr::Turn,
-                Expr::Moan(Some("X")),
+                Expr::Moan(Some("X".into())),
                 Expr::Moan(None)
             ]
         ),
