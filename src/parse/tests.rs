@@ -3,7 +3,10 @@ use crate::scroll::expression::Expr;
 use crate::value::Value;
 
 fn init() {
-    let _ = env_logger::builder().is_test(true).try_init();
+    let _ = env_logger::builder()
+        .filter_level(log::LevelFilter::Trace)
+        .is_test(true)
+        .try_init();
 }
 
 #[test]
@@ -195,6 +198,7 @@ summon
     animate
     remember 1312
     task Test2
+        animate
     animate
 animate";
 
@@ -387,7 +391,10 @@ animate
             .statements()
             .get(4)
             .unwrap(),
-        &Stmt::Say(Some("Markus".into()), vec![Expr::Value(Value::Integer(-161))])
+        &Stmt::Say(
+            Some("Markus".into()),
+            vec![Expr::Value(Value::Integer(-161))]
+        )
     );
     assert_eq!(
         recipe
@@ -400,7 +407,10 @@ animate
             .statements()
             .get(5)
             .unwrap(),
-        &Stmt::Say(Some("Dorni".into()), vec![Expr::Value(Value::Integer(1312))])
+        &Stmt::Say(
+            Some("Dorni".into()),
+            vec![Expr::Value(Value::Integer(1312))]
+        )
     );
     assert_eq!(
         recipe
@@ -521,7 +531,10 @@ animate
             .statements()
             .get(4)
             .unwrap(),
-        &Stmt::Remember(Some("Markus".into()), vec![Expr::Value(Value::Integer(-161))])
+        &Stmt::Remember(
+            Some("Markus".into()),
+            vec![Expr::Value(Value::Integer(-161))]
+        )
     );
     assert_eq!(
         recipe
@@ -534,7 +547,10 @@ animate
             .statements()
             .get(5)
             .unwrap(),
-        &Stmt::Remember(Some("Dorni".into()), vec![Expr::Value(Value::Integer(1312))])
+        &Stmt::Remember(
+            Some("Dorni".into()),
+            vec![Expr::Value(Value::Integer(1312))]
+        )
     );
     assert_eq!(
         recipe
@@ -944,14 +960,20 @@ animate";
                 statements[2],
                 Stmt::Remember(
                     Some("Zombie1".into()),
-                    vec![Expr::Moan(Some("Zombie1".into())), Expr::Moan(Some("Zombie2".into()))]
+                    vec![
+                        Expr::Moan(Some("Zombie1".into())),
+                        Expr::Moan(Some("Zombie2".into()))
+                    ]
                 )
             );
             assert_eq!(
                 statements[3],
                 Stmt::Remember(
                     Some("Zombie2".into()),
-                    vec![Expr::Moan(Some("Zombie1".into())), Expr::Moan(Some("Zombie2".into()))]
+                    vec![
+                        Expr::Moan(Some("Zombie1".into())),
+                        Expr::Moan(Some("Zombie2".into()))
+                    ]
                 )
             );
             assert_eq!(

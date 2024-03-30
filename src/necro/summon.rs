@@ -133,32 +133,32 @@ impl<'a: 'static> Spirit<'a> {
             }
             Species::Djinn => {
                 todo!()
-            //     let sample_size = fastrand::usize(1..=10 * self.creature.tasks().len());
-            //     let mut task_ids: Vec<usize> =
-            //         iter::repeat_with(|| fastrand::usize(0..self.creature.tasks().len()))
-            //             .take(sample_size)
-            //             .collect();
+                //     let sample_size = fastrand::usize(1..=10 * self.creature.tasks().len());
+                //     let mut task_ids: Vec<usize> =
+                //         iter::repeat_with(|| fastrand::usize(0..self.creature.tasks().len()))
+                //             .take(sample_size)
+                //             .collect();
 
-            //     debug!("Djinn task order {:?}", &task_ids);
-            //     while !task_ids.is_empty() {
-            //         let mut tasks = Vec::new();
-            //         for _ in
-            //             1..=fastrand::usize(1..=(f32::ceil(task_ids.len() as f32 / 5.0) as usize))
-            //         {
-            //             let selected = task_ids.pop().unwrap();
-            //             let task = self.creature.tasks().get_index(selected).unwrap();
-            //             tasks.push(tokio::spawn(tokio::spawn(
-            //                 Arc::clone(&self).perform(Arc::clone(&state), task),
-            //             )));
-            //         }
-            //         for e in future::join_all(tasks)
-            //             .await
-            //             .into_iter()
-            //             .filter_map(|t| t.err())
-            //         {
-            //             error!("{}", e);
-            //         }
-            //     }
+                //     debug!("Djinn task order {:?}", &task_ids);
+                //     while !task_ids.is_empty() {
+                //         let mut tasks = Vec::new();
+                //         for _ in
+                //             1..=fastrand::usize(1..=(f32::ceil(task_ids.len() as f32 / 5.0) as usize))
+                //         {
+                //             let selected = task_ids.pop().unwrap();
+                //             let task = self.creature.tasks().get_index(selected).unwrap();
+                //             tasks.push(tokio::spawn(tokio::spawn(
+                //                 Arc::clone(&self).perform(Arc::clone(&state), task),
+                //             )));
+                //         }
+                //         for e in future::join_all(tasks)
+                //             .await
+                //             .into_iter()
+                //             .filter_map(|t| t.err())
+                //         {
+                //             error!("{}", e);
+                //         }
+                //     }
             }
         }
     }
@@ -172,12 +172,7 @@ impl<'a: 'static> Spirit<'a> {
     }
 
     // #[async_recursion]
-    async fn exec_stmts(
-        &self,
-        state: &Arc<State>,
-        task: &mut RunningTask,
-        stmts: &'a Vec<Stmt>,
-    ) {
+    async fn exec_stmts(&self, state: &Arc<State>, task: &mut RunningTask, stmts: &'a Vec<Stmt>) {
         debug!("{} executing statements {:?}", self.name, stmts);
         for stmt in stmts {
             // wait until entity is active
@@ -345,14 +340,15 @@ impl<'a: 'static> Spirit<'a> {
     fn eval_expr(&self, state: &Arc<State>, expr: &Expr, stack: &mut Vec<Value>) {
         match expr {
             Expr::Moan(None) => {
-                *stack.last_mut().unwrap() = get_value(state, self.name.as_str()) + stack.last().unwrap();
+                *stack.last_mut().unwrap() =
+                    get_value(state, self.name.as_str()) + stack.last().unwrap();
             }
             Expr::Moan(Some(other_name)) => {
                 *stack.last_mut().unwrap() = get_value(state, other_name) + stack.last().unwrap();
             }
-            Expr::Remembering(None, value) => {
-                stack.push(Value::Boolean(value == get_value(state, self.name.as_str())))
-            }
+            Expr::Remembering(None, value) => stack.push(Value::Boolean(
+                value == get_value(state, self.name.as_str()),
+            )),
             Expr::Remembering(Some(other_name), value) => {
                 stack.push(Value::Boolean(value == get_value(state, other_name)))
             }

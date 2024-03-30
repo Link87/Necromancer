@@ -2,8 +2,13 @@ use either::Either;
 use log::{debug, trace};
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_till, take_until};
-use nom::character::complete::{alpha1, alphanumeric0, char, digit1, multispace0, multispace1};
-use nom::combinator::{all_consuming, eof, into, map, map_parser, map_res, not, peek, recognize};
+use nom::character::complete::{
+    alpha1, alphanumeric0, anychar, char, digit1, multispace0, multispace1,
+};
+use nom::combinator::{
+    all_consuming, complete, consumed, cut, eof, into, map, map_parser, map_res, not, peek,
+    recognize, rest_len, value,
+};
 use nom::error::Error;
 use nom::multi::{many0, many1, many_till, separated_list1};
 use nom::sequence::{delimited, pair, preceded, separated_pair, terminated, tuple};
@@ -29,62 +34,78 @@ impl<'a> Parse<'a> for Scroll {
     fn parse(code: &'a str) -> IResult<&'a str, Scroll> {
         trace!("Code (syntax tree): {}", code);
         multispace0(code)?;
-        into(many1(terminated(Entity::parse, alt((eof, multispace1)))))(code)
+        into(complete(many1(terminated(
+            Entity::parse,
+            alt((recognize(pair(multispace0, eof)), recognize(multispace1))),
+        ))))(code)
     }
 }
 
 impl<'a> Parse<'a> for Entity {
     fn parse(code: &'a str) -> IResult<&'a str, Entity> {
-        trace!("Code (creature): {}", code);
-        let (code, (name, species)) = terminated(
-            separated_pair(
-                parse_identifier,
-                tuple((multispace1, tag("is"), multispace1)),
-                Species::parse,
-            ),
-            pair(multispace1, tag("summon")),
-        )(code)?;
+        // Leave any whitespace after the entity definition in the input.
+        trace!("Code (entity): {}", code);
+        let (code, (name, species)) = parse_entity_header(code)?;
 
-        let (code, (statements, spell)) = many_till(
-            preceded(
-                multispace1,
-                alt((
-                    map(
-                        preceded(pair(tag("remember"), multispace1), Value::parse),
-                        Either::Left,
-                    ),
-                    map(Task::parse, Either::Right),
-                )),
-            ),
-            preceded(
+        // Find the end of the entity definition and collect any code in between. Expect EOF or a new entity definition after this one.
+        // End of entity definition is still in input after this.
+        let (code, contents) = recognize(many_till(
+            anychar,
+            peek(tuple((
                 multispace1,
                 alt((tag("animate"), tag("bind"), tag("disturb"))),
-            ),
+                alt((
+                    recognize(pair(multispace0, eof)),
+                    recognize(pair(multispace1, parse_entity_header)),
+                )),
+            ))),
+        ))(code)?;
+
+        // Now actually parse the end of the entity definition.
+        let (code, spell) = preceded(
+            multispace1,
+            alt((tag("animate"), tag("bind"), tag("disturb"))),
         )(code)?;
+
+        trace!("Code (entity): content is {}", contents);
+
+        // Parse the contents of the entity definition.
+        let (_, statements) = many0(preceded(
+            multispace1,
+            alt((
+                map(Task::parse, Either::Left),
+                map(
+                    preceded(pair(tag("remember"), multispace1), Value::parse),
+                    Either::Right,
+                ),
+            )),
+        ))(contents)?;
 
         let active = match (species, spell) {
             (Species::Zombie, "animate") => true,
             (Species::Ghost, "disturb") => true,
-            (Species::Vampire, _) | (Species::Demon, _) | (Species::Djinn, _) => true, // "bind" spell
+            (Species::Vampire, "bind") | (Species::Demon, "bind") | (Species::Djinn, "bind") => {
+                true
+            }
             _ => false,
         };
 
         // Separate values and tasks into different Vecs.
         let statements = statements
             .into_iter()
-            .partition::<Vec<Either<Value, Task>>, _>(Either::is_left);
-        let memory = statements
+            .partition::<Vec<Either<Task, Value>>, _>(Either::is_left);
+        let tasks = statements
             .0
             .into_iter()
-            .next()
             .map(Either::unwrap_left)
-            .unwrap_or(Value::Void);
-        let tasks = statements
-            .1
-            .into_iter()
-            .map(Either::unwrap_right)
             .map(|task| (task.name(), task))
             .collect::<TaskList>();
+        let memory = statements
+            .1
+            .into_iter()
+            .next()
+            .map(Either::unwrap_right)
+            .unwrap_or(Value::Void);
 
         debug!(
             "Summoning creature {} of species {:?} with {} tasks, using {}.",
@@ -98,9 +119,21 @@ impl<'a> Parse<'a> for Entity {
     }
 }
 
+fn parse_entity_header<'a>(code: &'a str) -> IResult<&'a str, (&'a str, Species)> {
+    trace!("Code (entity header): {}", code);
+    terminated(
+        separated_pair(
+            parse_identifier,
+            tuple((multispace1, tag("is"), multispace1)),
+            Species::parse,
+        ),
+        pair(multispace1, tag("summon")),
+    )(code)
+}
+
 impl<'a> Parse<'a> for Species {
     fn parse(code: &'a str) -> IResult<&'a str, Species> {
-        trace!("Code (kind): {}", code);
+        trace!("Code (species): {}", code);
         alt((
             map(tuple((tag("a"), multispace1, tag("zombie"))), |_| {
                 Species::Zombie
@@ -135,19 +168,51 @@ impl<'a> Parse<'a> for Species {
 
 impl<'a> Parse<'a> for Task {
     fn parse(code: &'a str) -> IResult<&'a str, Task> {
+        // Parse anything until the next task defintion. Take the last animate or bind as the end of the task.
         trace!("Code (task): {}", code);
-        map(
-            tuple((
-                preceded(pair(tag("task"), multispace1), parse_identifier),
-                many0(preceded(multispace1, Stmt::parse)),
-                preceded(
-                    multispace1,
-                    alt((map(tag("animate"), |_| true), map(tag("bind"), |_| false))),
-                ),
+
+        let (code, name) = parse_task_header(code)?;
+
+        // Find the beginning of the next task definition or the end of the input.
+        // May include some remembers after the end of the task though.
+        let (next, contents) = cut(recognize(many_till(
+            anychar,
+            peek(alt((
+                recognize(pair(multispace0, eof)),
+                recognize(pair(multispace1, parse_task_header)),
+            ))),
+        )))(code)?;
+
+        // Now find the last animate or bind in the contents. Everything after that is remember statements outside the task.
+        let (remembers, contents) = cut(recognize(many1(many_till(
+            anychar,
+            alt((tag("animate"), tag("bind"))),
+        ))))(contents)?;
+
+        // Remove the animate or bind at the end of the task.
+        let (_, (contents, (_, active))) = cut(consumed(many_till(
+            many_till(anychar, multispace1),
+            peek(terminated(
+                alt((value(true, tag("animate")), value(false, tag("bind")))),
+                pair(multispace0, eof),
             )),
-            |(name, statements, active)| Task::new(name, active, statements),
-        )(code)
+        )))(contents)?;
+        trace!("Code (task): content is {}", contents);
+
+        // Parse statements in the task.
+        let (_, stmts) = many0(preceded(multispace1, Stmt::parse))(contents)?;
+
+        let rest = &code[rest_len(code)?.1 - next.len() - remembers.len()..];
+        Ok((rest, Task::new(name, active, stmts)))
     }
+}
+
+/// Parse the header of a task definition and return the task's name.
+///
+/// A task header is defined as the keyword `task` followed by a single identifier.
+fn parse_task_header<'a>(code: &'a str) -> IResult<&'a str, &'a str> {
+    trace!("Code (task header): {}", code);
+    preceded(pair(tag("task"), multispace1), parse_identifier)(code)
 }
 
 impl<'a> Parse<'a> for Stmt {
@@ -155,26 +220,20 @@ impl<'a> Parse<'a> for Stmt {
         trace!("Code (statement): {}", code);
         alt((
             map(
-                separated_pair(tag("animatex"), multispace1, parse_identifier),
-                |(_, name)| {
-                    // TODO
-                    Stmt::Animate(Some(name.into()))
-                },
+                separated_pair(tag("animate"), multispace1, parse_identifier),
+                |(_, name)| Stmt::Animate(Some(name.into())),
             ),
-            map(tag("animatex"), |_| Stmt::Animate(None)), // TODO
+            map(tag("animate"), |_| Stmt::Animate(None)),
             map(
                 separated_pair(tag("banish"), multispace1, parse_identifier),
                 |(_, name)| Stmt::Banish(Some(name.into())),
             ),
             map(tag("banish"), |_| Stmt::Banish(None)),
             map(
-                separated_pair(tag("disturbx"), multispace1, parse_identifier),
-                |(_, name)| {
-                    // TODO
-                    Stmt::Disturb(Some(name.into()))
-                },
+                separated_pair(tag("disturb"), multispace1, parse_identifier),
+                |(_, name)| Stmt::Disturb(Some(name.into())),
             ),
-            map(tag("disturbx"), |_| Stmt::Disturb(None)), // TODO
+            map(tag("disturb"), |_| Stmt::Disturb(None)),
             map(
                 separated_pair(tag("forget"), multispace1, parse_identifier),
                 |(_, name)| Stmt::Forget(Some(name.into())),
@@ -308,6 +367,9 @@ impl<'a> Parse<'a> for Value {
     }
 }
 
+/// Parse an integer.
+///
+/// Supports positive and negative integers.
 fn parse_integer<'a>(code: &'a str) -> IResult<&'a str, i64> {
     trace!("Code (int): {}", code);
     map_res(
@@ -316,17 +378,26 @@ fn parse_integer<'a>(code: &'a str) -> IResult<&'a str, i64> {
     )(code)
 }
 
+/// Parse a string.
+///
+/// Strings are delimited by double quotes ("").
 fn parse_string<'a>(code: &'a str) -> IResult<&'a str, &'a str> {
     trace!("Code (string): {}", code);
     delimited(char('"'), take_till(|c| c == '\"'), char('"'))(code)
 }
 
+/// Parse an identifier.
+///
+/// An identifier is a string of alphanumeric characters starting with a letter. Keywords are not allowed as identifiers.
 fn parse_identifier<'a>(code: &'a str) -> IResult<&'a str, &'a str> {
     trace!("Code (identifier): {}", code);
     peek(not(keyword))(code)?;
     recognize(pair(alpha1, alphanumeric0))(code)
 }
 
+/// Recognize a keyword.
+///
+/// Returns `Ok` if the input starts with a keyword, otherwise `Err`.
 fn keyword<'a>(code: &'a str) -> IResult<&'a str, &'a str> {
     recognize(alt((
         alt((

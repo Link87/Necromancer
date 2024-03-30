@@ -22,8 +22,8 @@ pub struct Scroll {
 
 impl Scroll {
     /// Create a new recipe from a set of creatures.
-    fn new(creatures: EntityList) -> Scroll {
-        Scroll { entities: creatures }
+    fn new(entities: EntityList) -> Scroll {
+        Scroll { entities }
     }
 
     /// Return the creatures listed in the recipe.
