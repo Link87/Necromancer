@@ -18,6 +18,6 @@ summon
 			remember Zombie1 moan Zombie1 moan Zombie2
 			remember Zombie2 moan Zombie1 moan Zombie2
 			remember moan 1
-		until remembering 10
+		until remembering 1000
 	animate
 animate

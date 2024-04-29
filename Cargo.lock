@@ -415,7 +415,6 @@ checksum = "38ad951c9d45bd4c77f4c843844870dddeb2e332864226f5a62277498e1627b8"
 dependencies = [
  "malachite-base",
  "malachite-nz",
- "malachite-q",
 ]
 
 [[package]]
@@ -439,17 +438,6 @@ dependencies = [
  "itertools",
  "libm",
  "malachite-base",
-]
-
-[[package]]
-name = "malachite-q"
-version = "0.4.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ad0ac879ecbb7e1cc8060b48696eebed0b0de8d922db4f8b378dfbc1bad806a"
-dependencies = [
- "itertools",
- "malachite-base",
- "malachite-nz",
 ]
 
 [[package]]

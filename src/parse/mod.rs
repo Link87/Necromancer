@@ -1,12 +1,14 @@
 use either::Either;
 use log::{debug, trace};
+use malachite::num::conversion::traits::FromSciString;
+use malachite::Integer;
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_till, take_until};
 use nom::character::complete::{
     alpha1, alphanumeric0, anychar, char, digit1, multispace0, multispace1,
 };
 use nom::combinator::{
-    all_consuming, complete, consumed, cut, eof, into, map, map_parser, map_res, not, peek,
+    all_consuming, complete, consumed, cut, eof, into, map, map_opt, map_parser, not, peek,
     recognize, rest_len, value,
 };
 use nom::error::Error;
@@ -370,11 +372,11 @@ impl<'a> Parse<'a> for Value {
 /// Parse an integer.
 ///
 /// Supports positive and negative integers.
-fn parse_integer<'a>(code: &'a str) -> IResult<&'a str, i64> {
+fn parse_integer<'a>(code: &'a str) -> IResult<&'a str, Integer> {
     trace!("Code (int): {}", code);
-    map_res(
+    map_opt(
         alt((digit1, recognize(pair(char('-'), digit1)))),
-        str::parse::<i64>,
+        FromSciString::from_sci_string,
     )(code)
 }
 
