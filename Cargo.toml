@@ -15,19 +15,19 @@ name = "summon"
 path = "src/main.rs"
 
 [dependencies]
-async-recursion = "1.0"
+async-recursion = "1.1"
 clap = {version = "4.5", features = ["cargo"]}
 dashmap = "5.5"
-either = "1.10"
+either = "1.11"
 env_logger = "0.11"
-fastrand = "2.0"
+fastrand = "2.1"
 futures = "0.3"
 indexmap = "2.2"
 log = "0.4"
 nom = "7.1"
 smol_str = "0.2"
 thiserror = "1.0"
-tokio = {version = "1.36", features = ["macros", "rt-multi-thread", "sync", "time"]}
+tokio = {version = "1.37", features = ["macros", "rt-multi-thread", "sync", "time"]}
 zalgo = "0.2"
 
 [profile.release]
