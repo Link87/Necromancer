@@ -28,7 +28,7 @@ pub enum Error {
 pub fn parse(path: &str) -> Result<Scroll, Error> {
     let code: &'static str = Box::new(fs::read_to_string(path)?).leak();
 
-    let scroll = parse::parse(&code)?;
+    let scroll = parse::parse(code)?;
     Ok(scroll)
 }
 

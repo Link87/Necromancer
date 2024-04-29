@@ -7,12 +7,13 @@ use malachite::Integer;
 use zalgo::{Generator, GeneratorArgs, ZalgoSize};
 
 /// A value that an entity can remember.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub enum Value {
     Integer(Integer),
     String(String),
     Boolean(bool),
     Infernal(String),
+    #[default]
     Void,
 }
 
@@ -152,12 +153,6 @@ impl From<Integer> for Value {
 impl From<bool> for Value {
     fn from(value: bool) -> Self {
         Value::Boolean(value)
-    }
-}
-
-impl Default for Value {
-    fn default() -> Value {
-        Value::Void
     }
 }
 

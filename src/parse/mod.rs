@@ -83,14 +83,14 @@ impl<'a> Parse<'a> for Entity {
             )),
         ))(contents)?;
 
-        let active = match (species, spell) {
-            (Species::Zombie, "animate") => true,
-            (Species::Ghost, "disturb") => true,
-            (Species::Vampire, "bind") | (Species::Demon, "bind") | (Species::Djinn, "bind") => {
-                true
-            }
-            _ => false,
-        };
+        let active = matches!(
+            (species, spell),
+            (Species::Zombie, "animate")
+                | (Species::Ghost, "disturb")
+                | (Species::Vampire, "bind")
+                | (Species::Demon, "bind")
+                | (Species::Djinn, "bind")
+        );
 
         // Separate values and tasks into different Vecs.
         let statements = statements
@@ -121,7 +121,7 @@ impl<'a> Parse<'a> for Entity {
     }
 }
 
-fn parse_entity_header<'a>(code: &'a str) -> IResult<&'a str, (&'a str, Species)> {
+fn parse_entity_header(code: &str) -> IResult<&str, (&str, Species)> {
     trace!("Code (entity header): {}", code);
     terminated(
         separated_pair(
@@ -212,7 +212,7 @@ impl<'a> Parse<'a> for Task {
 /// Parse the header of a task definition and return the task's name.
 ///
 /// A task header is defined as the keyword `task` followed by a single identifier.
-fn parse_task_header<'a>(code: &'a str) -> IResult<&'a str, &'a str> {
+fn parse_task_header(code: &str) -> IResult<&str, &str> {
     trace!("Code (task header): {}", code);
     preceded(pair(tag("task"), multispace1), parse_identifier)(code)
 }
@@ -372,7 +372,7 @@ impl<'a> Parse<'a> for Value {
 /// Parse an integer.
 ///
 /// Supports positive and negative integers.
-fn parse_integer<'a>(code: &'a str) -> IResult<&'a str, Integer> {
+fn parse_integer(code: &str) -> IResult<&str, Integer> {
     trace!("Code (int): {}", code);
     map_opt(
         alt((digit1, recognize(pair(char('-'), digit1)))),
@@ -383,7 +383,7 @@ fn parse_integer<'a>(code: &'a str) -> IResult<&'a str, Integer> {
 /// Parse a string.
 ///
 /// Strings are delimited by double quotes ("").
-fn parse_string<'a>(code: &'a str) -> IResult<&'a str, &'a str> {
+fn parse_string(code: &str) -> IResult<&str, &str> {
     trace!("Code (string): {}", code);
     delimited(char('"'), take_till(|c| c == '\"'), char('"'))(code)
 }
@@ -391,7 +391,7 @@ fn parse_string<'a>(code: &'a str) -> IResult<&'a str, &'a str> {
 /// Parse an identifier.
 ///
 /// An identifier is a string of alphanumeric characters starting with a letter. Keywords are not allowed as identifiers.
-fn parse_identifier<'a>(code: &'a str) -> IResult<&'a str, &'a str> {
+fn parse_identifier(code: &str) -> IResult<&str, &str> {
     trace!("Code (identifier): {}", code);
     peek(not(keyword))(code)?;
     recognize(pair(alpha1, alphanumeric0))(code)
@@ -400,7 +400,7 @@ fn parse_identifier<'a>(code: &'a str) -> IResult<&'a str, &'a str> {
 /// Recognize a keyword.
 ///
 /// Returns `Ok` if the input starts with a keyword, otherwise `Err`.
-fn keyword<'a>(code: &'a str) -> IResult<&'a str, &'a str> {
+fn keyword(code: &str) -> IResult<&str, &str> {
     recognize(alt((
         alt((
             tag("zombie"),
@@ -438,8 +438,8 @@ fn keyword<'a>(code: &'a str) -> IResult<&'a str, &'a str> {
     )))(code)
 }
 
-pub fn parse<'a>(code: &'a str) -> Result<Scroll, Error<&'a str>> {
-    match Finish::finish(terminated(Scroll::parse, pair(multispace0, eof))(&code)) {
+pub fn parse(code: &str) -> Result<Scroll, Error<&str>> {
+    match Finish::finish(terminated(Scroll::parse, pair(multispace0, eof))(code)) {
         Ok((_, tree)) => Ok(tree),
         Err(error) => Err(error),
     }

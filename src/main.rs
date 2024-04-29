@@ -22,7 +22,7 @@ fn main() {
                 .action(ArgAction::SetTrue)
                 .help("Stop after parsing the scroll and print the AST."),
         )
-        .group(ArgGroup::new("mode").args(&["syntax_tree_mode"]))
+        .group(ArgGroup::new("mode").args(["syntax_tree_mode"]))
         .arg(
             Arg::new("verbose")
                 .short('v')
